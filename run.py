@@ -26,8 +26,6 @@ app.secret_key = 'supersecretkey'
 # Global variable to hold uploaded data in memory
 data_store = None
 
-# Basic HTML templates inline for simplicity
-
 @app.route('/')
 def home():
     return render_template("home.html")
@@ -47,26 +45,36 @@ def upload():
             in_memory_file = BytesIO(file.read())
             df = pd.read_excel(in_memory_file)
 
-            # Validate columns
-            expected_cols = {'date', 'time', 'printer_name', 'user_name', 'no_of_pages', 'location'}
-            df.columns = [col.lower() for col in df.columns]  # Normalize first
+            # Normalize column names (strip and lowercase)
+            df.columns = [col.strip().lower() for col in df.columns]
+
+            # Expected columns based on your Excel sheet
+            expected_cols = {
+                'document name', 'user name', 'hostname', 'pages printed',
+                'date', 'month', 'week 1', 'printer model', 'division', 'location'
+            }
+
             if not expected_cols.issubset(set(df.columns)):
                 flash(f"Excel file must contain columns: {expected_cols}")
                 return redirect(url_for('upload'))
 
-            # Convert date column to datetime
+            # Clean and parse date column
+            df['date'] = df['date'].astype(str).str.strip()
             df['date'] = pd.to_datetime(df['date'], errors='coerce')
-            if df['date'].isnull().any():
-                flash("Some dates could not be parsed. Please fix the Excel file.")
-                return redirect(url_for('upload'))
 
-            # Convert no_of_pages to numeric
-            df['no_of_pages'] = pd.to_numeric(df['no_of_pages'], errors='coerce')
-            if df['no_of_pages'].isnull().any():
-                flash("Some 'no_of_pages' values are invalid.")
-                return redirect(url_for('upload'))
+            # Drop rows with invalid dates
+            initial_row_count = len(df)
+            df = df.dropna(subset=['date'])
+            dropped_rows = initial_row_count - len(df)
 
-            # Store in global variable
+            if dropped_rows > 0:
+                flash(f"{dropped_rows} rows with invalid dates were skipped.")
+
+            # Convert 'pages printed' to numeric
+            df['pages printed'] = pd.to_numeric(df['pages printed'], errors='coerce')
+            df = df.dropna(subset=['pages printed'])
+
+            # Store in global memory
             data_store = df
 
             flash('File uploaded and processed successfully!')
@@ -77,6 +85,7 @@ def upload():
             return redirect(url_for('upload'))
 
     return render_template('upload.html')
+
 
 @app.route('/view')
 def view():
@@ -107,12 +116,16 @@ def dashboard():
             df['date_key'] = df['date'].dt.to_period('M')
         elif time_filter == 'yearly':
             df['date_key'] = df['date'].dt.year
-        # Group by the date_key if you want summaries by date_key - but for simplicity we skip grouping here
 
-    # Compute stats
-    top_users = df.groupby('user_name')['no_of_pages'].sum().sort_values(ascending=False).head(10).to_dict()
-    top_printers = df.groupby('printer_name')['no_of_pages'].sum().sort_values(ascending=False).head(10).to_dict()
-    least_printers = df.groupby('printer_name')['no_of_pages'].sum().sort_values(ascending=True).head(10).to_dict()
+    df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y', errors='coerce')
+    df['date'] = df['date'].astype(str).str.strip()
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+              
+
+    # Compute stats based on new column names
+    top_users = df.groupby('user name')['pages printed'].sum().sort_values(ascending=False).head(10).to_dict()
+    top_printers = df.groupby('printer model')['pages printed'].sum().sort_values(ascending=False).head(10).to_dict()
+    least_printers = df.groupby('printer model')['pages printed'].sum().sort_values(ascending=True).head(10).to_dict()
 
     locations = sorted(df['location'].unique())
 
