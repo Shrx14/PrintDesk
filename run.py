@@ -1,6 +1,24 @@
 from flask import Flask, request, render_template, redirect, url_for, flash
 import pandas as pd
 from io import BytesIO
+import pyodbc
+
+SQL_DRIVER = '{ODBC Driver 18 for SQL Server}'
+SQL_SERVER = '10.3.2.121,63973'
+SQL_DATABASE = 'PrintDesk'
+SQL_USERNAME = 'sa'
+SQL_PASSWORD = 'Sql@2025'
+
+def get_db_connection():
+    conn_str = (
+        f'DRIVER={SQL_DRIVER};'
+        f'SERVER={SQL_SERVER};'
+        f'DATABASE={SQL_DATABASE};'
+        f'UID={SQL_USERNAME};'
+        f'PWD={SQL_PASSWORD};'
+        'TrustServerCertificate=yes;'
+    )
+    return pyodbc.connect(conn_str)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
