@@ -10,6 +10,7 @@
       <table class="table table-bordered table-striped table-hover align-middle">
         <thead class="table-dark">
           <tr>
+            <th>Sr No</th>
             {% for col in data.columns %}
               <th>{{ col|title }}</th>
             {% endfor %}
@@ -18,7 +19,8 @@
         <tbody>
           {% for row in data.itertuples() %}
           <tr>
-            {% for val in row[1:] %}
+            <td>{{ loop.index }}</td>
+            {% for val in row[1:] %}  
               <td>{{ val }}</td>
             {% endfor %}
           </tr>
