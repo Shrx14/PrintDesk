@@ -56,6 +56,28 @@ def create_table_if_not_exists():
     except Exception as e:
         logging.error(f"Error creating table: {e}")
 
+def create_printer_data_table_if_not_exists():
+    create_table_sql = """
+    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='printer_data' AND xtype='U')
+    CREATE TABLE printer_data (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        hostname NVARCHAR(255) UNIQUE,
+        division NVARCHAR(255),
+        printer_model NVARCHAR(255),
+        location NVARCHAR(255)
+    )
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(create_table_sql)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        logging.info("Table 'printer_data' checked/created successfully.")
+    except Exception as e:
+        logging.error(f"Error creating printer_data table: {e}")
+
 def insert_data_to_db(df):
     duplicates = []
     try:
@@ -120,6 +142,7 @@ def home():
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
+        upload_type = request.form.get('upload_type')
         file = request.files.get('file')
         if not file:
             flash('No file uploaded.')
@@ -134,90 +157,183 @@ def upload():
             # Normalize column names (strip and lowercase)
             df.columns = [col.strip().lower() for col in df.columns]
 
-            # Log DataFrame head and dtypes for debugging
-            logging.info(f"DataFrame head after reading Excel:\\n{df.head()}")
-            logging.info(f"DataFrame dtypes:\\n{df.dtypes}")
+            if upload_type == 'printer_logs':
+                # Expected columns for printer logs
+                expected_cols = {
+                    'document name', 'user name', 'hostname', 'pages printed', 'date'
+                }
 
-            # Expected columns based on your Excel sheet
-            expected_cols = {
-                'document name', 'user name', 'hostname', 'pages printed',
-                'date', 'month', 'week 1', 'printer model', 'division', 'location'
-            }
+                if not expected_cols.issubset(set(df.columns)):
+                    flash(f"Excel file must contain columns: {expected_cols}")
+                    return redirect(url_for('upload'))
 
-            if not expected_cols.issubset(set(df.columns)):
-                flash(f"Excel file must contain columns: {expected_cols}")
+                # Preprocess date column: strip whitespace and convert to string
+                df['date'] = df['date'].astype(str).str.strip()
+
+                # Define a list of date formats to try
+                date_formats = [
+                    '%Y-%m-%d %H:%M:%S',
+                    '%d-%m-%Y %H:%M:%S',
+                    '%Y-%m-%d',
+                    '%d-%m-%Y',
+                    '%m/%d/%Y',
+                    '%d/%m/%Y',
+                    '%b %d %Y',
+                    '%B %d %Y',
+                    '%b %d, %Y',
+                    '%B %d, %Y',
+                    '%Y/%m/%d',
+                    '%m-%d-%Y',
+                    '%d %b %Y',
+                    '%d %B %Y',
+                    '%Y.%m.%d',
+                    '%d.%m.%Y',
+                    '%Y%m%d',
+                ]
+
+                def try_parsing_date(text):
+                    from datetime import datetime
+                    for fmt in date_formats:
+                        try:
+                            return datetime.strptime(text, fmt)
+                        except Exception:
+                            continue
+                    return pd.NaT
+
+                # Apply custom date parsing
+                df['date'] = df['date'].apply(try_parsing_date)
+
+                # Log date column after parsing
+                logging.info(f"Date column after custom parsing:\\n{df['date'].head()}")
+
+                # Identify invalid dates
+                initial_row_count = len(df)
+                invalid_dates = df[df['date'].isna()]
+                if not invalid_dates.empty:
+                    invalid_date_values = invalid_dates['date'].astype(str).tolist()
+                    logging.warning(f"Rows with invalid dates:\\n{invalid_date_values[:20]}")
+                    flash(f"{len(invalid_date_values)} rows with invalid dates were skipped. Invalid dates: {invalid_date_values[:5]} ...")
+                df = df.dropna(subset=['date'])
+                dropped_rows = initial_row_count - len(df)
+
+                # Convert 'pages printed' to numeric
+                df['pages printed'] = pd.to_numeric(df['pages printed'], errors='coerce')
+                df = df.dropna(subset=['pages printed'])
+
+                # Derive 'month' column formatted as abbreviated month name + apostrophe + last two digits of year (e.g., May'25)
+                df['month'] = df['date'].dt.strftime("%b'%y")
+
+                # Derive 'week_1' column formatted as "Week " + ISO week number (e.g., Week 2)
+                df['week_1'] = df['date'].dt.isocalendar().week
+                df['week_1'] = df['week_1'].apply(lambda x: f"Week {x}")
+
+                # Read printer_data.xlsx to get printer model, division, location by matching hostname
+                printer_data_path = 'static/demo excel/printer_data.xlsx'
+                printer_df = pd.read_excel(printer_data_path)
+
+                # Normalize hostname columns for matching
+                printer_df['hostname'] = printer_df['HostName'].str.strip().str.lower()
+                df['hostname'] = df['hostname'].str.strip().str.lower()
+
+                # Select relevant columns from printer_data
+                printer_df_subset = printer_df[['hostname', 'Division', 'Printer Typ', 'Loca_Nam']].copy()
+                printer_df_subset.rename(columns={
+                    'Division': 'division',
+                    'Printer Typ': 'printer_model',
+                    'Loca_Nam': 'location'
+                }, inplace=True)
+
+                # Merge uploaded data with printer data on hostname
+                df = df.merge(printer_df_subset, on='hostname', how='left')
+
+                # Check for missing printer data after merge
+                missing_printer_data = df[df['printer_model'].isna()]
+                if not missing_printer_data.empty:
+                    missing_hosts = missing_printer_data['hostname'].unique()
+                    logging.warning(f"Missing printer data for hostnames: {missing_hosts}")
+                    flash(f"Warning: Missing printer data for hostnames: {', '.join(missing_hosts[:5])}...")
+
+                # Create table if not exists
+                create_table_if_not_exists()
+
+                # Insert data into database
+                duplicates = insert_data_to_db(df)
+
+                if duplicates and len(duplicates) > 0:
+                    duplicate_msgs = [f"Duplicate entry skipped: Document '{d['document_name']}', User '{d['user_name']}', Host '{d['hostname']}', Date '{d['date']}'" for d in duplicates]
+                    for msg in duplicate_msgs:
+                        flash(msg)
+
+                flash('File uploaded and data saved to database successfully!')
+                return redirect(url_for('view'))
+
+            elif upload_type == 'printer_data':
+                # Normalize column names: strip, lower, replace spaces with underscores
+                df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
+
+                # Expected columns for printer data after normalization
+                expected_cols = {
+                    'hostname', 'division', 'printer_type', 'loca_name'
+                }
+
+                if not expected_cols.issubset(set(df.columns)):
+                    flash(f"Excel file must contain columns: {expected_cols}")
+                    return redirect(url_for('upload'))
+
+                # Normalize hostname column
+                df['hostname'] = df['hostname'].str.strip().str.lower()
+
+                # Rename columns to match database schema
+                df.rename(columns={
+                    'printer_type': 'printer_model',
+                    'loca_name': 'location'
+                }, inplace=True)
+
+                # Create printer_data table if not exists
+                create_printer_data_table_if_not_exists()
+
+                # Insert printer data into database
+                duplicates = []
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    check_sql = """
+                    SELECT COUNT(*) FROM printer_data WHERE hostname = ?
+                    """
+                    insert_sql = """
+                    INSERT INTO printer_data (hostname, division, printer_model, location)
+                    VALUES (?, ?, ?, ?)
+                    """
+                    update_sql = """
+                    UPDATE printer_data SET division = ?, printer_model = ?, location = ? WHERE hostname = ?
+                    """
+                    for _, row in df.iterrows():
+                        hostname = row['hostname']
+                        division = row['division']
+                        printer_model = row['printer_model']
+                        location = row['location']
+
+                        # Log values before insert/update
+                        logging.info(f"Inserting/updating printer_data: hostname={hostname}, division={division}, printer_model={printer_model}, location={location}")
+
+                        cursor.execute(check_sql, (hostname,))
+                        count = cursor.fetchone()[0]
+
+                        if count > 0:
+                            cursor.execute(update_sql, (division, printer_model, location, hostname))
+                        else:
+                            cursor.execute(insert_sql, (hostname, division, printer_model, location))
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                    flash('Printer data uploaded and saved successfully!')
+                    return redirect(url_for('upload'))
+                except Exception as e:
+                    flash(f"Error inserting printer data into database: {e}")
+                    return redirect(url_for('upload'))
+            else:
+                flash('Invalid upload type selected.')
                 return redirect(url_for('upload'))
-
-            # Preprocess date column: strip whitespace and convert to string
-            df['date'] = df['date'].astype(str).str.strip()
-
-            # Define a list of date formats to try
-            date_formats = [
-                '%Y-%m-%d %H:%M:%S',
-                '%d-%m-%Y %H:%M:%S',
-                '%Y-%m-%d',
-                '%d-%m-%Y',
-                '%m/%d/%Y',
-                '%d/%m/%Y',
-                '%b %d %Y',
-                '%B %d %Y',
-                '%b %d, %Y',
-                '%B %d, %Y',
-                '%Y/%m/%d',
-                '%m-%d-%Y',
-                '%d %b %Y',
-                '%d %B %Y',
-                '%Y.%m.%d',
-                '%d.%m.%Y',
-                '%Y%m%d',
-            ]
-
-            def try_parsing_date(text):
-                from datetime import datetime
-                for fmt in date_formats:
-                    try:
-                        return datetime.strptime(text, fmt)
-                    except Exception:
-                        continue
-                return pd.NaT
-
-            # Apply custom date parsing
-            df['date'] = df['date'].apply(try_parsing_date)
-
-            # Log date column after parsing
-            logging.info(f"Date column after custom parsing:\\n{df['date'].head()}")
-
-            # Identify invalid dates
-            initial_row_count = len(df)
-            invalid_dates = df[df['date'].isna()]
-            if not invalid_dates.empty:
-                invalid_date_values = invalid_dates['date'].astype(str).tolist()
-                logging.warning(f"Rows with invalid dates:\\n{invalid_date_values[:20]}")
-                flash(f"{len(invalid_date_values)} rows with invalid dates were skipped. Invalid dates: {invalid_date_values[:5]} ...")
-            df = df.dropna(subset=['date'])
-            dropped_rows = initial_row_count - len(df)
-
-            # Removed redundant flash for dropped_rows since detailed flash above
-            # if dropped_rows > 0:
-            #     flash(f"{dropped_rows} rows with invalid dates were skipped.")
-
-            # Convert 'pages printed' to numeric
-            df['pages printed'] = pd.to_numeric(df['pages printed'], errors='coerce')
-            df = df.dropna(subset=['pages printed'])
-
-            # Create table if not exists
-            create_table_if_not_exists()
-
-            # Insert data into database
-            duplicates = insert_data_to_db(df)
-
-            if duplicates and len(duplicates) > 0:
-                duplicate_msgs = [f"Duplicate entry skipped: Document '{d['document_name']}', User '{d['user_name']}', Host '{d['hostname']}', Date '{d['date']}'" for d in duplicates]
-                for msg in duplicate_msgs:
-                    flash(msg)
-
-            flash('File uploaded and data saved to database successfully!')
-            return redirect(url_for('view'))
 
         except Exception as e:
             flash(f"Error processing file: {e}")

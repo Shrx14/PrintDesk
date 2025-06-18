@@ -143,8 +143,14 @@
 </header>
 
 <div class="upload-wrapper">
-  <h3>Upload Printer Logs (Excel)</h3>
+  <h3>Upload Data (Excel)</h3>
   <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+    <label for="upload_type">Select Upload Type:</label><br>
+    <select name="upload_type" id="upload_type" required>
+      <option value="printer_logs">Printer Logs</option>
+      <option value="printer_data">Printer Data</option>
+    </select>
+    <br><br>
     <input type="file" name="file" required>
     <br>
     <input type="submit" value="Upload">
