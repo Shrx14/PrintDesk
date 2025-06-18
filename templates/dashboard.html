@@ -1,125 +1,116 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Dashboard</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script>
-    function updateDateInputVisibility() {
-      const timeFilter = document.getElementById('time_filter').value;
-      const dateInputWrapper = document.getElementById('date_input_wrapper');
-      const dateInput = document.getElementById('date_input');
+{% extends "base.html" %}
 
-      if (timeFilter === 'daily') {
-        dateInput.type = 'date';
-        dateInputWrapper.classList.remove('d-none');
-      } else if (timeFilter === 'monthly') {
-        dateInput.type = 'month';
-        dateInputWrapper.classList.remove('d-none');
-      } else if (timeFilter === 'yearly') {
-        dateInput.type = 'number';
-        dateInput.min = '2000';
-        dateInput.max = '2100';
-        dateInput.placeholder = 'e.g., 2025';
-        dateInputWrapper.classList.remove('d-none');
-      } else {
-        dateInputWrapper.classList.add('d-none');
-      }
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<script>
+  function updateDateInputVisibility() {
+    const timeFilter = document.getElementById('time_filter').value;
+    const dateInputWrapper = document.getElementById('date_input_wrapper');
+    const dateInput = document.getElementById('date_input');
+
+    if (timeFilter === 'daily') {
+      dateInput.type = 'date';
+      dateInputWrapper.classList.remove('d-none');
+    } else if (timeFilter === 'monthly') {
+      dateInput.type = 'month';
+      dateInputWrapper.classList.remove('d-none');
+    } else if (timeFilter === 'yearly') {
+      dateInput.type = 'number';
+      dateInput.min = '2000';
+      dateInput.max = '2100';
+      dateInput.placeholder = 'e.g., 2025';
+      dateInputWrapper.classList.remove('d-none');
+    } else {
+      dateInputWrapper.classList.add('d-none');
     }
+  }
 
-    window.addEventListener('DOMContentLoaded', updateDateInputVisibility);
-  </script>
-</head>
-<body class="bg-light">
+  window.addEventListener('DOMContentLoaded', updateDateInputVisibility);
+</script>
 
-<div class="container my-5">
-  <h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
+<h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
 
-  {% if data is none %}
-    <div class="alert alert-warning text-center">
-      No data uploaded yet. Please <a href="{{ url_for('home') }}">upload an Excel file</a> first.
-    </div>
-  {% else %}
-
-    <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
-      <div class="col-md-3">
-        <label for="time_filter" class="form-label">Filter by Time</label>
-        <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
-          <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All</option>
-          <option value="daily" {% if time_filter == 'daily' %}selected{% endif %}>Daily</option>
-          <option value="monthly" {% if time_filter == 'monthly' %}selected{% endif %}>Monthly</option>
-          <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
-        </select>
-      </div>
-
-      <div class="col-md-3">
-        <label for="location_filter" class="form-label">Filter by Location</label>
-        <select id="location_filter" name="location_filter" class="form-select">
-          <option value="all" {% if location_filter == 'all' %}selected{% endif %}>All</option>
-          {% for loc in locations %}
-            <option value="{{ loc }}" {% if location_filter == loc %}selected{% endif %}>{{ loc }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div class="col-md-3 d-none" id="date_input_wrapper">
-        <label for="date_input" class="form-label">Date / Month / Year</label>
-        <input name="date_input" id="date_input" value="{{ date_input or '' }}" class="form-control">
-      </div>
-
-      <div class="col-md-3 text-end">
-        <button type="submit" class="btn btn-primary">Apply Filters</button>
-      </div>
-    </form>
-
-    <div class="row g-4">
-      <div class="col-md-4">
-        <div class="card border-primary shadow-sm">
-          <div class="card-header bg-primary text-white">Top 10 Users</div>
-          <ul class="list-group list-group-flush">
-            {% for user, pages in top_users.items() %}
-              <li class="list-group-item d-flex justify-content-between">
-                <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-
-      <div class="col-md-4">
-        <div class="card border-success shadow-sm">
-          <div class="card-header bg-success text-white">Top 10 Printers</div>
-          <ul class="list-group list-group-flush">
-            {% for printer, pages in top_printers.items() %}
-              <li class="list-group-item d-flex justify-content-between">
-                <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-
-      <div class="col-md-4">
-        <div class="card border-danger shadow-sm">
-          <div class="card-header bg-danger text-white">Least Used Printers</div>
-          <ul class="list-group list-group-flush">
-            {% for printer, pages in least_printers.items() %}
-              <li class="list-group-item d-flex justify-content-between">
-                <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-    </div>
-
-  {% endif %}
-
-  <div class="mt-5 text-center">
-    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
-    <a href="{{ url_for('view') }}" class="btn btn-outline-info">📄 View Data</a>
+{% if data is none %}
+  <div class="alert alert-warning text-center">
+    No data uploaded yet. Please <a href="{{ url_for('home') }}">upload an Excel file</a> first.
   </div>
-</div>
+{% else %}
+  <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
+    <div class="col-md-3">
+      <label for="time_filter" class="form-label">Filter by Time</label>
+      <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
+        <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All</option>
+        <option value="daily" {% if time_filter == 'daily' %}selected{% endif %}>Daily</option>
+        <option value="monthly" {% if time_filter == 'monthly' %}selected{% endif %}>Monthly</option>
+        <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
+      </select>
+    </div>
 
-</body>
-</html>
+    <div class="col-md-3">
+      <label for="location_filter" class="form-label">Filter by Location</label>
+      <select id="location_filter" name="location_filter" class="form-select">
+        <option value="all" {% if location_filter == 'all' %}selected{% endif %}>All</option>
+        {% for loc in locations %}
+          <option value="{{ loc }}" {% if location_filter == loc %}selected{% endif %}>{{ loc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-3 d-none" id="date_input_wrapper">
+      <label for="date_input" class="form-label">Date / Month / Year</label>
+      <input name="date_input" id="date_input" value="{{ date_input or '' }}" class="form-control">
+    </div>
+
+    <div class="col-md-3 text-end">
+      <button type="submit" class="btn btn-primary">Apply Filters</button>
+    </div>
+  </form>
+
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="card border-primary shadow-sm">
+        <div class="card-header bg-primary text-white">Top 10 Users</div>
+        <ul class="list-group list-group-flush">
+          {% for user, pages in top_users.items() %}
+            <li class="list-group-item d-flex justify-content-between">
+              <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card border-success shadow-sm">
+        <div class="card-header bg-success text-white">Top 10 Printers</div>
+        <ul class="list-group list-group-flush">
+          {% for printer, pages in top_printers.items() %}
+            <li class="list-group-item d-flex justify-content-between">
+              <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card border-danger shadow-sm">
+        <div class="card-header bg-danger text-white">Least Used Printers</div>
+        <ul class="list-group list-group-flush">
+          {% for printer, pages in least_printers.items() %}
+            <li class="list-group-item d-flex justify-content-between">
+              <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<div class="mt-5 text-center">
+  <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
+  <a href="{{ url_for('view') }}" class="btn btn-outline-info">📄 View Data</a>
+</div>
+{% endblock %}
