@@ -57,83 +57,95 @@ def create_table_if_not_exists():
         logging.error(f"Error creating table: {e}")
 
 def create_printer_data_table_if_not_exists():
-    create_table_sql = """
-    IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='printer_data' AND xtype='U')
-    CREATE TABLE printer_data (
-        id INT IDENTITY(1,1) PRIMARY KEY,
-        hostname NVARCHAR(255) UNIQUE,
-        division NVARCHAR(255),
-        printer_model NVARCHAR(255),
-        location NVARCHAR(255)
-    )
-    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(create_table_sql)
-        conn.commit()
+        # Check if table exists
+        cursor.execute("SELECT * FROM sysobjects WHERE name='printer_data' AND xtype='U'")
+        result = cursor.fetchone()
+        if not result:
+            create_table_sql = """
+            CREATE TABLE printer_data (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                hostname NVARCHAR(255) UNIQUE,
+                division NVARCHAR(255),
+                printer_model NVARCHAR(255),
+                location NVARCHAR(255)
+            )
+            """
+            cursor.execute(create_table_sql)
+            conn.commit()
+            logging.info("Table 'printer_data' created successfully.")
+        else:
+            logging.info("Table 'printer_data' already exists.")
         cursor.close()
         conn.close()
-        logging.info("Table 'printer_data' checked/created successfully.")
     except Exception as e:
         logging.error(f"Error creating printer_data table: {e}")
+        from flask import flash
+        flash(f"Error creating printer_data table: {e}")
 
 def insert_data_to_db(df):
     duplicates = []
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        check_sql = """
-        SELECT COUNT(*) FROM printer_logs 
-        WHERE user_name = ? AND document_name = ? AND hostname = ? AND pages_printed = ? AND date = ? AND month = ? AND week_1 = ? AND printer_model = ? AND division = ? AND location = ?
-        """
-        insert_sql = """
-        INSERT INTO printer_logs 
-        (document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        for _, row in df.iterrows():
-            user_name = row['user name']
-            document_name = row['document name']
-            hostname = row['hostname']
-            pages_printed = int(row['pages printed'])
-            date_val = row['date'].strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(row['date']) else None
-            month = row['month']
-            week_1 = row['week 1']
-            printer_model = row['printer model']
-            division = row['division']
-            location = row['location']
+    logging.info(f"Starting insert_data_to_db with {len(df)} rows")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    check_sql = """
+    SELECT COUNT(*) FROM printer_logs 
+    WHERE user_name = ? AND document_name = ? AND hostname = ? AND date = ?
+    """
+    insert_sql = """
+    INSERT INTO printer_logs 
+    (document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+    inserted_count = 0
+    # Filter out rows with missing or empty hostname
+    df_filtered = df[df['hostname'].notnull() & (df['hostname'] != '')]
+    for idx, row in df_filtered.iterrows():
+        user_name = row['user name']
+        document_name = row['document name']
+        hostname = row['hostname']
+        pages_printed = int(row['pages printed'])
+        date_val = row['date'].strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(row['date']) else None
+        month = row['month']
+        week_1 = row['week_1']
+        printer_model = row.get('printer_model', None)
+        division = row.get('division', None)
+        location = row.get('location', None)
 
-            cursor.execute(check_sql, (user_name, document_name, hostname, pages_printed, date_val, month, week_1, printer_model, division, location))
-            count = cursor.fetchone()[0]
+        logging.info(f"Row {idx}: Checking duplicate for user_name={user_name}, document_name={document_name}, hostname={hostname}, date={date_val}")
+        cursor.execute(check_sql, (user_name, document_name, hostname, date_val))
+        count = cursor.fetchone()[0]
+        logging.info(f"Row {idx}: Duplicate count: {count}")
 
-            if count > 0:
-                duplicates.append({
-                    'user_name': user_name,
-                    'document_name': document_name,
-                    'hostname': hostname,
-                    'pages_printed': pages_printed,
-                    'date': date_val,
-                    'month': month,
-                    'week_1': week_1,
-                    'printer_model': printer_model,
-                    'division': division,
-                    'location': location
-                })
-            else:
-                cursor.execute(insert_sql, (
-                    document_name, user_name, hostname, 
-                    pages_printed, date_val,
-                    month, week_1, printer_model, division, location
-                ))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        logging.info(f"Inserted {len(df) - len(duplicates)} rows into 'printer_logs' table successfully. {len(duplicates)} duplicates skipped.")
-        return duplicates
-    except Exception as e:
-        logging.error(f"Error inserting data into database: {e}")
-        return None
+        if count > 0:
+            duplicates.append({
+                'user_name': user_name,
+                'document_name': document_name,
+                'hostname': hostname,
+                'pages_printed': pages_printed,
+                'date': date_val,
+                'month': month,
+                'week_1': week_1,
+                'printer_model': printer_model,
+                'division': division,
+                'location': location
+            })
+            logging.info(f"Row {idx}: Duplicate found, skipping insert.")
+        else:
+            logging.info(f"Row {idx}: Inserting row: {row.to_dict()}")
+            cursor.execute(insert_sql, (
+                document_name, user_name, hostname, 
+                pages_printed, date_val,
+                month, week_1, printer_model, division, location
+            ))
+            inserted_count += 1
+    conn.commit()
+    cursor.close()
+    conn.close()
+    logging.info(f"Inserted {inserted_count} rows into 'printer_logs' table successfully. {len(duplicates)} duplicates skipped.")
+    return duplicates
 
 @app.route('/')
 def home():
@@ -154,10 +166,9 @@ def upload():
             in_memory_file = BytesIO(file.read())
             df = pd.read_excel(in_memory_file)
 
-            # Normalize column names (strip and lowercase)
-            df.columns = [col.strip().lower() for col in df.columns]
-
             if upload_type == 'printer_logs':
+                # Normalize column names (strip and lowercase)
+                df.columns = [col.strip().lower() for col in df.columns]
                 # Expected columns for printer logs
                 expected_cols = {
                     'document name', 'user name', 'hostname', 'pages printed', 'date'
@@ -223,41 +234,65 @@ def upload():
                 # Derive 'month' column formatted as abbreviated month name + apostrophe + last two digits of year (e.g., May'25)
                 df['month'] = df['date'].dt.strftime("%b'%y")
 
-                # Derive 'week_1' column formatted as "Week " + ISO week number (e.g., Week 2)
-                df['week_1'] = df['date'].dt.isocalendar().week
+                # Derive 'week_1' column formatted as "Week " + week number in the month (e.g., Week 2)
+                def week_of_month(dt):
+                    first_day = dt.replace(day=1)
+                    dom = dt.day
+                    adjusted_dom = dom + first_day.weekday()
+                    return int((adjusted_dom - 1) / 7) + 1
+
+                df['week_1'] = df['date'].apply(week_of_month)
                 df['week_1'] = df['week_1'].apply(lambda x: f"Week {x}")
 
-                # Read printer_data.xlsx to get printer model, division, location by matching hostname
-                printer_data_path = 'static/demo excel/printer_data.xlsx'
-                printer_df = pd.read_excel(printer_data_path)
+                # Query printer_data table from database to get printer model, division, location by matching hostname
+                conn = get_db_connection()
+                query = "SELECT hostname, division, printer_model, location FROM printer_data"
+                printer_data_db = pd.read_sql_query(query, conn)
+                conn.close()
 
                 # Normalize hostname columns for matching
-                printer_df['hostname'] = printer_df['HostName'].str.strip().str.lower()
+                printer_data_db['hostname'] = printer_data_db['hostname'].str.strip().str.lower()
                 df['hostname'] = df['hostname'].str.strip().str.lower()
 
-                # Select relevant columns from printer_data
-                printer_df_subset = printer_df[['hostname', 'Division', 'Printer Typ', 'Loca_Nam']].copy()
-                printer_df_subset.rename(columns={
-                    'Division': 'division',
-                    'Printer Typ': 'printer_model',
-                    'Loca_Nam': 'location'
-                }, inplace=True)
+                # Merge uploaded data with printer data from database on hostname
+                df = df.merge(printer_data_db, on='hostname', how='left')
 
-                # Merge uploaded data with printer data on hostname
-                df = df.merge(printer_df_subset, on='hostname', how='left')
+                # Allow missing printer data without blocking upload
+                # Suppress warning about missing printer data for hostnames
+                # missing_printer_data = df[df['printer_model'].isna()]
+                # if not missing_printer_data.empty:
+                #     missing_hosts = missing_printer_data['hostname'].unique()
+                #     logging.warning(f"Missing printer data for hostnames: {missing_hosts}")
+                #     flash(f"Warning: Missing printer data for hostnames: {', '.join(missing_hosts[:5])}...")
 
-                # Check for missing printer data after merge
-                missing_printer_data = df[df['printer_model'].isna()]
-                if not missing_printer_data.empty:
-                    missing_hosts = missing_printer_data['hostname'].unique()
-                    logging.warning(f"Missing printer data for hostnames: {missing_hosts}")
-                    flash(f"Warning: Missing printer data for hostnames: {', '.join(missing_hosts[:5])}...")
+                # Remove fillna calls to avoid error, keep NaN for missing values
+                # df['printer_model'] = df['printer_model'].fillna(value=None)
+                # df['division'] = df['division'].fillna(value=None)
+                # df['location'] = df['location'].fillna(value=None)
 
                 # Create table if not exists
                 create_table_if_not_exists()
 
+                # Rename 'week 1' column to 'week_1' to match database schema
+                if 'week 1' in df.columns:
+                    df.rename(columns={'week 1': 'week_1'}, inplace=True)
+
+                # Replace NaN in printer_model, division, location with None for DB insertion
+                df['printer_model'] = df['printer_model'].where(pd.notnull(df['printer_model']), None)
+                df['division'] = df['division'].where(pd.notnull(df['division']), None)
+                df['location'] = df['location'].where(pd.notnull(df['location']), None)
+
+                # Log derived month and week_1 columns before insertion
+                logging.info(f"Derived 'month' column sample data:\\n{df['month'].head()}")
+                logging.info(f"Derived 'week_1' column sample data:\\n{df['week_1'].head()}")
+
                 # Insert data into database
-                duplicates = insert_data_to_db(df)
+                try:
+                    duplicates = insert_data_to_db(df)
+                except Exception as e:
+                    flash(f"Error inserting data into database: {e}")
+                    logging.error(f"Error inserting data into database: {e}")
+                    return redirect(url_for('upload'))
 
                 if duplicates and len(duplicates) > 0:
                     duplicate_msgs = [f"Duplicate entry skipped: Document '{d['document_name']}', User '{d['user_name']}', Host '{d['hostname']}', Date '{d['date']}'" for d in duplicates]
@@ -268,33 +303,40 @@ def upload():
                 return redirect(url_for('view'))
 
             elif upload_type == 'printer_data':
-                # Normalize column names: strip, lower, replace spaces with underscores
-                df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
+                # Create printer_data table if not exists BEFORE validating file columns
+                try:
+                    create_printer_data_table_if_not_exists()
+                except Exception as e:
+                    flash(f"Error creating printer_data table: {e}")
+                    logging.error(f"Error creating printer_data table: {e}")
+                    return redirect(url_for('upload'))
 
-                # Expected columns for printer data after normalization
+                # Do NOT normalize columns to lowercase here to preserve original Excel column names
+                # expected columns as in Excel file
                 expected_cols = {
-                    'hostname', 'division', 'printer_type', 'loca_name'
+                    'HostName', 'Division', 'Asset_Model_Descr', 'Loca_Name'
                 }
 
                 if not expected_cols.issubset(set(df.columns)):
                     flash(f"Excel file must contain columns: {expected_cols}")
+                    logging.error(f"Missing columns in printer_data upload: {set(df.columns)}")
                     return redirect(url_for('upload'))
 
                 # Normalize hostname column
-                df['hostname'] = df['hostname'].str.strip().str.lower()
+                df['HostName'] = df['HostName'].str.strip().str.lower()
 
                 # Rename columns to match database schema
                 df.rename(columns={
-                    'printer_type': 'printer_model',
-                    'loca_name': 'location'
+                    'HostName': 'hostname',
+                    'Division': 'division',
+                    'Asset_Model_Descr': 'printer_model',
+                    'Loca_Name': 'location'
                 }, inplace=True)
-
-                # Create printer_data table if not exists
-                create_printer_data_table_if_not_exists()
 
                 # Insert printer data into database
                 duplicates = []
                 try:
+                    logging.info(f"Starting insert of {len(df)} rows into printer_data")
                     conn = get_db_connection()
                     cursor = conn.cursor()
                     check_sql = """
@@ -307,11 +349,14 @@ def upload():
                     update_sql = """
                     UPDATE printer_data SET division = ?, printer_model = ?, location = ? WHERE hostname = ?
                     """
-                    for _, row in df.iterrows():
+                    # Filter out rows with missing hostname
+                    df_filtered = df[df['hostname'].notnull() & (df['hostname'] != '')]
+                    for idx, row in df_filtered.iterrows():
+                        logging.info(f"Row {idx}: {row.to_dict()}")
                         hostname = row['hostname']
-                        division = row['division']
-                        printer_model = row['printer_model']
-                        location = row['location']
+                        division = row['division'] if pd.notnull(row['division']) and row['division'] != '' else None
+                        printer_model = row['printer_model'] if pd.notnull(row['printer_model']) and row['printer_model'] != '' else None
+                        location = row['location'] if pd.notnull(row['location']) and row['location'] != '' else None
 
                         # Log values before insert/update
                         logging.info(f"Inserting/updating printer_data: hostname={hostname}, division={division}, printer_model={printer_model}, location={location}")
@@ -330,6 +375,7 @@ def upload():
                     return redirect(url_for('upload'))
                 except Exception as e:
                     flash(f"Error inserting printer data into database: {e}")
+                    logging.error(f"Error inserting printer data into database: {e}")
                     return redirect(url_for('upload'))
             else:
                 flash('Invalid upload type selected.')
