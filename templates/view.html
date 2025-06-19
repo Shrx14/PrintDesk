@@ -33,4 +33,9 @@
       No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
     </div>
   {% endif %}
+
+  <div class="mt-5 text-center">
+    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">📊 Dashboard</a>
+  </div>
 {% endblock %}

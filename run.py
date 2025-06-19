@@ -405,8 +405,84 @@ def view():
 
 @app.route('/dashboard')
 def dashboard():
-    # Keeping existing dashboard logic unchanged for now
-    return render_template('dashboard.html')
+    import datetime
+    time_filter = request.args.get('time_filter', 'all')
+    location_filter = request.args.get('location_filter', 'all')
+    date_input = request.args.get('date_input', None)
+
+    # Set default date_input based on time_filter if not provided
+    if not date_input:
+        now = datetime.datetime.now()
+        if time_filter == 'daily':
+            date_input = now.strftime('%Y-%m-%d')
+        elif time_filter == 'monthly':
+            date_input = now.strftime('%Y-%m')
+        elif time_filter == 'yearly':
+            date_input = str(now.year)
+
+    try:
+        conn = get_db_connection()
+        query = "SELECT user_name, printer_model, location, pages_printed, date FROM printer_logs"
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+
+        # Convert 'date' column to datetime
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+        # Filter by location if applicable
+        if location_filter != 'all':
+            df = df[df['location'] == location_filter]
+
+        # Filter by time
+        if time_filter == 'daily' and date_input:
+            filter_date = pd.to_datetime(date_input, errors='coerce')
+            if not pd.isna(filter_date):
+                df = df[df['date'].dt.date == filter_date.date()]
+        elif time_filter == 'monthly' and date_input:
+            filter_date = pd.to_datetime(date_input, errors='coerce')
+            if not pd.isna(filter_date):
+                df = df[(df['date'].dt.year == filter_date.year) & (df['date'].dt.month == filter_date.month)]
+        elif time_filter == 'yearly' and date_input:
+            filter_year = None
+            try:
+                filter_year = int(date_input)
+            except:
+                filter_year = None
+            if filter_year:
+                df = df[df['date'].dt.year == filter_year]
+        # else 'all' no filter
+
+        # Compute top users by pages printed
+        top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
+
+        # Compute top printers by pages printed
+        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
+
+        # Compute least used printers by pages printed
+        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10).to_dict()
+
+        # Get unique locations for filter dropdown
+        locations = sorted(df['location'].dropna().unique())
+
+        # Pass the filtered data to template
+        data = df
+
+    except Exception as e:
+        top_users = {}
+        top_printers = {}
+        least_printers = {}
+        locations = []
+        data = None
+
+    return render_template('dashboard.html',
+                           top_users=top_users,
+                           top_printers=top_printers,
+                           least_printers=least_printers,
+                           locations=locations,
+                           data=data,
+                           time_filter=time_filter,
+                           location_filter=location_filter,
+                           date_input=date_input)
 
 if __name__ == '__main__':
     app.run(debug=True)
