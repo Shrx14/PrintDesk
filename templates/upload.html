@@ -1,51 +1,36 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Upload Logs - Printer Desk</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+{% extends "base.html" %}
+
+{% block title %}Upload Logs - Printer Desk{% endblock %}
+
+{% block content %}
+  <div class="upload-wrapper">
+    <h3>Upload Data (Excel)</h3>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+      <label for="upload_type">Select Upload Type:</label><br>
+      <select name="upload_type" id="upload_type" required>
+        <option value="printer_logs">Printer Logs</option>
+        <option value="printer_data">Printer Data</option>
+      </select>
+      <br><br>
+      <input type="file" name="file" required>
+      <br>
+      <input type="submit" value="Upload">
+    </form>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-messages">
+          <ul>
+            {% for msg in messages %}
+              <li>{{ msg }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    {% endwith %}
+  </div>
+
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f4f6f8;
-      color: #2d3748;
-    }
-
-    header {
-      background-color: #4f46e5;
-      color: white;
-      padding: 20px 40px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    header h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-    }
-
-    nav a {
-      margin-left: 20px;
-      text-decoration: none;
-      color: white;
-      font-weight: 500;
-      transition: opacity 0.2s ease;
-    }
-
-    nav a:hover {
-      opacity: 0.85;
-      text-decoration: underline;
-    }
-
     .upload-wrapper {
       max-width: 600px;
       margin: 60px auto;
@@ -113,61 +98,5 @@
       font-weight: 500;
       text-align: left;
     }
-
-    @media (max-width: 600px) {
-      .upload-wrapper {
-        margin: 30px 16px;
-        padding: 30px 20px;
-      }
-
-      header {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      nav {
-        margin-top: 10px;
-      }
-    }
   </style>
-</head>
-<body>
-
-<header>
-  <h1>Printer Desk</h1>
-  <nav>
-    <a href="{{ url_for('home') }}"><i class="fas fa-home"></i> Home</a>
-    <a href="{{ url_for('view') }}"><i class="fas fa-table"></i> View</a>
-    <a href="{{ url_for('dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
-  </nav>
-</header>
-
-<div class="upload-wrapper">
-  <h3>Upload Data (Excel)</h3>
-  <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
-    <label for="upload_type">Select Upload Type:</label><br>
-    <select name="upload_type" id="upload_type" required>
-      <option value="printer_logs">Printer Logs</option>
-      <option value="printer_data">Printer Data</option>
-    </select>
-    <br><br>
-    <input type="file" name="file" required>
-    <br>
-    <input type="submit" value="Upload">
-  </form>
-
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      <div class="flash-messages">
-        <ul>
-          {% for msg in messages %}
-            <li>{{ msg }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-  {% endwith %}
-</div>
-
-</body>
-</html>
+{% endblock %}
