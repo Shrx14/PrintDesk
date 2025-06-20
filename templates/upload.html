@@ -6,16 +6,16 @@
   <div class="upload-wrapper">
     <h3>Upload Data (Excel)</h3>
     <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
-      <label for="upload_type">Select Upload Type:</label><br>
-      <select name="upload_type" id="upload_type" required>
-        <option value="printer_logs">Printer Logs</option>
-        <option value="printer_data">Printer Data</option>
-      </select>
+      
       <br><br>
       <input type="file" name="file" required>
       <br>
       <input type="submit" value="Upload">
     </form>
+
+    <div class="mt-3">
+      <a href="{{ url_for('static', filename='demo excel/demo_Excel.xlsx') }}" download>Download Demo Excel File</a>
+    </div>
 
     {% with messages = get_flashed_messages() %}
       {% if messages %}
@@ -105,3 +105,4 @@
     }
   </style>
 {% endblock %}
+</create_file>
