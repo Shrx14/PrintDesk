@@ -9,27 +9,33 @@
     const dateInputWrapper = document.getElementById('date_input_wrapper');
     const monthInputWrapper = document.getElementById('month_input_wrapper');
     const weekSelectWrapper = document.getElementById('week_select_wrapper');
+    const yearInputWrapper = document.getElementById('year_input_wrapper');
 
     if (timeFilter === 'daily') {
       dateInputWrapper.classList.remove('d-none');
       monthInputWrapper.classList.add('d-none');
       weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.add('d-none');
     } else if (timeFilter === 'weekly') {
       dateInputWrapper.classList.add('d-none');
-      monthInputWrapper.classList.remove('d-none');
+      monthInputWrapper.classList.add('d-none');
       weekSelectWrapper.classList.remove('d-none');
+      yearInputWrapper.classList.add('d-none');
     } else if (timeFilter === 'monthly') {
       dateInputWrapper.classList.add('d-none');
       monthInputWrapper.classList.remove('d-none');
       weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.add('d-none');
     } else if (timeFilter === 'yearly') {
       dateInputWrapper.classList.add('d-none');
       monthInputWrapper.classList.add('d-none');
       weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.remove('d-none');
     } else {
       dateInputWrapper.classList.add('d-none');
       monthInputWrapper.classList.add('d-none');
       weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.add('d-none');
     }
   }
 
@@ -43,17 +49,22 @@
     No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
   </div>
 {% else %}
-  <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
-    <div class="col-md-3">
-      <label for="time_filter" class="form-label">Filter by Time</label>
-      <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
-        <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All</option>
-        <option value="daily" {% if time_filter == 'daily' %}selected{% endif %}>Daily</option>
-        <option value="weekly" {% if time_filter == 'weekly' %}selected{% endif %}>Weekly</option>
-        <option value="monthly" {% if time_filter == 'monthly' %}selected{% endif %}>Monthly</option>
-        <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
-      </select>
+  {% if data.empty %}
+    <div class="alert alert-info text-center">
+      No data found for the selected filters.
     </div>
+  {% else %}
+    <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
+      <div class="col-md-3">
+        <label for="time_filter" class="form-label">Filter by Time</label>
+        <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
+          <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All</option>
+          <option value="daily" {% if time_filter == 'daily' %}selected{% endif %}>Daily</option>
+          <option value="weekly" {% if time_filter == 'weekly' %}selected{% endif %}>Weekly</option>
+          <option value="monthly" {% if time_filter == 'monthly' %}selected{% endif %}>Monthly</option>
+          <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
+        </select>
+      </div>
 
     <div class="col-md-3">
       <label for="location_filter" class="form-label">Filter by Location</label>
@@ -84,6 +95,11 @@
         <option value="4" {% if week_select == '4' %}selected{% endif %}>Week 4</option>
         <option value="5" {% if week_select == '5' %}selected{% endif %}>Week 5</option>
       </select>
+    </div>
+
+    <div class="col-md-3 d-none" id="year_input_wrapper">
+      <label for="year_input" class="form-label">Year</label>
+      <input name="year_input" id="year_input" type="number" min="2000" max="2100" value="{{ year_input or '' }}" class="form-control">
     </div>
 
     <div class="col-md-3 text-end">
@@ -131,6 +147,7 @@
       </div>
     </div>
   </div>
+{% endif %}
 {% endif %}
 
 <div class="mt-5 text-center">
