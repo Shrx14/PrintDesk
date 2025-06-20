@@ -484,5 +484,6 @@ def dashboard():
                            location_filter=location_filter,
                            date_input=date_input)
 
+
 if __name__ == '__main__':
     app.run(debug=True)
