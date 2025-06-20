@@ -2,7 +2,7 @@ from flask import Flask, request, render_template, redirect, url_for, flash
 import pandas as pd
 from io import BytesIO
 import pyodbc
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import urllib
 
 SQL_DRIVER = '{ODBC Driver 18 for SQL Server}'
@@ -480,37 +480,82 @@ def upload():
 
 from flask import request
 
+from flask import request, render_template, flash
+from sqlalchemy import text
+import pandas as pd
+
 @app.route('/view')
 def view():
     page = request.args.get('page', default=1, type=int)
     per_page = 100
     offset = (page - 1) * per_page
 
+    # Define valid filterable columns
+    columns = [
+        "document_name", "user_name", "hostname", "pages_printed", "date",
+        "month", "week_1", "printer_model", "division", "location"
+    ]
+
+    filters = []
+    params = {}
+
+    # Collect filters from URL query string
+    for col in columns:
+        val = request.args.get(col)
+        if val:
+            filters.append(f"{col} = :{col}")
+            params[col] = val
+
+    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+
     try:
         engine = get_sqlalchemy_engine()
-        count_query = "SELECT COUNT(*) FROM printer_logs"
-        with engine.connect() as conn:
-            total_rows = conn.execute(text(count_query)).scalar()
-        total_pages = (total_rows + per_page - 1) // per_page
 
-        query = f"""
-            SELECT document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location
-            FROM printer_logs
-            ORDER BY date DESC
-            OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
-        """
-        df = pd.read_sql_query(query, engine)
+        # Get unique values for dropdowns
+        unique_values = {}
+        with engine.connect() as conn:
+            for col in columns:
+                result = conn.execute(text(f"SELECT DISTINCT {col} FROM printer_logs ORDER BY {col}"))
+                unique_values[col] = [str(row[0]) for row in result if row[0] is not None]
+
+            # Count total rows after filtering
+            count_query = f"SELECT COUNT(*) FROM printer_logs {where_clause}"
+            total_rows = conn.execute(text(count_query), params).scalar()
+            total_pages = (total_rows + per_page - 1) // per_page
+
+            # Get paginated filtered data
+            query = f"""
+                SELECT document_name, user_name, hostname, pages_printed, date, month,
+                       week_1, printer_model, division, location
+                FROM printer_logs
+                {where_clause}
+                ORDER BY date DESC
+                OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
+            """
+
+            df = pd.read_sql_query(text(query), conn, params=params)
+
         engine.dispose()
 
-        # Format date column as string for display with date and time
+        # Format date column if present
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
+
     except Exception as e:
-        flash(f"Error retrieving data from database: {e}")
+        flash(f"Error retrieving data: {e}")
         df = None
+        unique_values = {col: [] for col in columns}
         total_pages = 0
 
-    return render_template('view.html', data=df, page=page, total_pages=total_pages)
+    return render_template(
+        'view.html',
+        data=df,
+        page=page,
+        total_pages=total_pages,
+        unique_values=unique_values,
+        filters_applied=bool(params)
+    )
+
 
 @app.route('/dashboard')
 def dashboard():
