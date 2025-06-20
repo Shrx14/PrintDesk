@@ -45,6 +45,10 @@ def get_sqlalchemy_engine():
     )
     return engine
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 
@@ -606,32 +610,39 @@ def download_excel():
 
 from flask import request, render_template
 import pandas as pd
-import datetime
 @app.route('/dashboard')
 def dashboard():
     import datetime
     time_filter = request.args.get('time_filter', 'all')
     location_filter = request.args.get('location_filter', 'all')
     date_input = request.args.get('date_input', None)
+    month_input = request.args.get('month_input', None)
+    year_input = request.args.get('year_input', None)
 
-    # Set default date_input based on time_filter if not provided
-    if not date_input:
+    # Set default date_input, month_input or year_input based on time_filter if not provided
+    if not date_input and not month_input and not year_input:
         now = datetime.datetime.now()
         if time_filter == 'daily':
             date_input = now.strftime('%Y-%m-%d')
         elif time_filter == 'monthly':
-            date_input = now.strftime('%Y-%m')
+            month_input = now.strftime('%Y-%m')
         elif time_filter == 'yearly':
-            date_input = str(now.year)
+            year_input = str(now.year)
 
     try:
+        import traceback
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, pages_printed, date FROM printer_logs"
+        query = "SELECT user_name, printer_model, location, pages_printed, date, month FROM printer_logs"
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
         # Convert 'date' column to datetime
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+        import logging
+        logging.info(f"Dashboard filter: time_filter={time_filter}, month_input={month_input}")
+        logging.info(f"Date column unique years: {df['date'].dt.year.dropna().unique()}")
+        logging.info(f"Date column unique months: {df['date'].dt.month.dropna().unique()}")
 
         # Filter by location if applicable
         if location_filter != 'all':
@@ -642,14 +653,17 @@ def dashboard():
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
                 df = df[df['date'].dt.date == filter_date.date()]
-        elif time_filter == 'monthly' and date_input:
-            filter_date = pd.to_datetime(date_input, errors='coerce')
+        elif time_filter == 'monthly' and month_input:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            logging.info(f"Filtering monthly for year={filter_date.year}, month={filter_date.month}")
             if not pd.isna(filter_date):
-                df = df[(df['date'].dt.year == filter_date.year) & (df['date'].dt.month == filter_date.month)]
-        elif time_filter == 'yearly' and date_input:
+                # Convert filter_date to format like "May'25"
+                month_str = filter_date.strftime("%b'%y")
+                df = df[df['month'] == month_str]
+        elif time_filter == 'yearly' and year_input:
             filter_year = None
             try:
-                filter_year = int(date_input)
+                filter_year = int(year_input)
             except:
                 filter_year = None
             if filter_year:
@@ -672,11 +686,13 @@ def dashboard():
         data = df
 
     except Exception as e:
+        logging.error(f"Error in dashboard route: {e}")
+        logging.error(traceback.format_exc())
         top_users = {}
         top_printers = {}
         least_printers = {}
         locations = []
-        data = None
+        data = pd.DataFrame()  # Return empty dataframe instead of None to avoid "No data uploaded" message
 
     return render_template('dashboard.html',
                            top_users=top_users,
@@ -685,7 +701,11 @@ def dashboard():
                            locations=locations,
                            data=data,
                            time_filter=time_filter,
-                           location_filter=location_filter,
-                           date_input=date_input)    
+                           location_filter=location_filter,  
+                           date_input=date_input,
+                           month_input=month_input,
+                           year_input=year_input)
+
+
 if __name__ == '__main__':
     app.run(debug=True)
