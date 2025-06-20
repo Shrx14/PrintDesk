@@ -604,7 +604,9 @@ def download_excel():
         flash(f"Error generating Excel: {e}")
         return redirect(url_for('view'))
 
-
+from flask import request, render_template
+import pandas as pd
+import datetime
 @app.route('/dashboard')
 def dashboard():
     import datetime
@@ -684,8 +686,6 @@ def dashboard():
                            data=data,
                            time_filter=time_filter,
                            location_filter=location_filter,
-                           date_input=date_input)
-
-
+                           date_input=date_input)    
 if __name__ == '__main__':
     app.run(debug=True)
