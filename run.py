@@ -536,6 +536,7 @@ def dashboard():
     date_input = request.args.get('date_input', None)
     month_input = request.args.get('month_input', None)
     year_input = request.args.get('year_input', None)
+    week_select = request.args.get('week_select', None)
 
     # Set default date_input, month_input or year_input based on time_filter if not provided
     if not date_input and not month_input and not year_input:
@@ -550,7 +551,7 @@ def dashboard():
     try:
         import traceback
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, pages_printed, date, month FROM printer_logs"
+        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week_1 FROM printer_logs"
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
@@ -558,7 +559,7 @@ def dashboard():
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
         import logging
-        logging.info(f"Dashboard filter: time_filter={time_filter}, month_input={month_input}")
+        logging.info(f"Dashboard filter: time_filter={time_filter}, month_input={month_input}, week_select={week_select}")
         logging.info(f"Date column unique years: {df['date'].dt.year.dropna().unique()}")
         logging.info(f"Date column unique months: {df['date'].dt.month.dropna().unique()}")
 
@@ -571,6 +572,13 @@ def dashboard():
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
                 df = df[df['date'].dt.date == filter_date.date()]
+        elif time_filter == 'weekly' and month_input and week_select:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            logging.info(f"Filtering weekly for month={month_input}, week={week_select}")
+            if not pd.isna(filter_date):
+                month_str = filter_date.strftime("%b'%y")
+                week_str = f"Week {week_select}"
+                df = df[(df['month'] == month_str) & (df['week_1'] == week_str)]
         elif time_filter == 'monthly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
             logging.info(f"Filtering monthly for year={filter_date.year}, month={filter_date.month}")
@@ -622,7 +630,8 @@ def dashboard():
                            location_filter=location_filter,
                            date_input=date_input,
                            month_input=month_input,
-                           year_input=year_input)
+                           year_input=year_input,
+                           week_select=week_select)
 
 
 if __name__ == '__main__':
