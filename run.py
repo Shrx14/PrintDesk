@@ -1,29 +1,24 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, jsonify
+from flask import Flask, request, render_template, redirect, url_for, flash
 import pandas as pd
 from io import BytesIO
 import pyodbc
 from sqlalchemy import create_engine
 import urllib
-from datetime import datetime
-import logging
-from flask_cors import CORS
 
-# -------------------------------
-# CONFIGURATION
-# -------------------------------
-app = Flask(__name__)
-app.secret_key = 'supersecretkey'
-CORS(app)
 SQL_DRIVER = '{ODBC Driver 18 for SQL Server}'
-SQL_SERVER = '10.3.2.121'
+SQL_SERVER = '10.3.2.121,63973'
 SQL_DATABASE = 'PrintDesk'
 SQL_USERNAME = 'sa'
 SQL_PASSWORD = 'Sql@2025'
 
 def get_db_connection():
     conn_str = (
-        f'DRIVER={SQL_DRIVER};SERVER={SQL_SERVER};DATABASE={SQL_DATABASE};'
-        f'UID={SQL_USERNAME};PWD={SQL_PASSWORD};TrustServerCertificate=yes;'
+        f'DRIVER={SQL_DRIVER};'
+        f'SERVER={SQL_SERVER};'
+        f'DATABASE={SQL_DATABASE};'
+        f'UID={SQL_USERNAME};'
+        f'PWD={SQL_PASSWORD};'
+        'TrustServerCertificate=yes;'
     )
     return pyodbc.connect(conn_str)
 
@@ -56,7 +51,7 @@ app.secret_key = 'supersecretkey'
 import logging
 
 def create_table_if_not_exists():
-    sql = """
+    create_table_sql = """
     IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='printer_logs' AND xtype='U')
     CREATE TABLE printer_logs (
         id INT IDENTITY(1,1) PRIMARY KEY,
@@ -71,18 +66,18 @@ def create_table_if_not_exists():
         division NVARCHAR(255),
         location NVARCHAR(255),
         CONSTRAINT unique_all_columns UNIQUE (
-            user_name, document_name, hostname, pages_printed, date,
-            month, week_1, printer_model, division, location
+            user_name, document_name, hostname, pages_printed, date, month, week_1, printer_model, division, location
         )
     )
     """
     try:
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute(sql)
+        cursor = conn.cursor()
+        cursor.execute(create_table_sql)
         conn.commit()
-        cur.close()
+        cursor.close()
         conn.close()
+        logging.info("Table 'printer_logs' checked/created successfully.")
     except Exception as e:
         logging.error(f"Error creating table: {e}")
 
@@ -244,10 +239,12 @@ def home():
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
     if request.method == 'POST':
+        upload_type = request.form.get('upload_type')
         file = request.files.get('file')
         if not file:
-            flash("No file uploaded.")
+            flash('No file uploaded.')
             return redirect(url_for('upload'))
+
         try:
             import logging
             # Read Excel file into DataFrame
@@ -255,6 +252,12 @@ def upload():
             df = pd.read_excel(in_memory_file)
 
             if upload_type == 'printer_logs':
+                # Limit rows to 5000 to avoid connection issues
+                max_rows = 5000
+                if len(df) > max_rows:
+                    flash(f"Upload file exceeds maximum allowed rows of {max_rows}. Please split your file and upload in parts.")
+                    return redirect(url_for('upload'))
+
                 # Normalize column names (strip and lowercase)
                 df.columns = [col.strip().lower() for col in df.columns]
                 # Expected columns for printer logs
@@ -333,10 +336,10 @@ def upload():
                 df['week_1'] = df['week_1'].apply(lambda x: f"Week {x}")
 
                 # Query printer_data table from database to get printer model, division, location by matching hostname
-                conn = get_db_connection()
+                engine = get_sqlalchemy_engine()
                 query = "SELECT hostname, division, printer_model, location FROM printer_data"
-                printer_data_db = pd.read_sql_query(query, conn)
-                conn.close()
+                printer_data_db = pd.read_sql_query(query, engine)
+                engine.dispose()
 
                 # Normalize hostname columns for matching
                 printer_data_db['hostname'] = printer_data_db['hostname'].str.strip().str.lower()
@@ -470,21 +473,35 @@ def upload():
                 return redirect(url_for('upload'))
 
         except Exception as e:
-            flash(f"Error: {e}")
+            flash(f"Error processing file: {e}")
             return redirect(url_for('upload'))
-    return render_template("upload.html")
 
-from flask import request
+    return render_template('upload.html')
 
 from flask import request
 
 @app.route('/view')
 def view():
+    page = request.args.get('page', default=1, type=int)
+    per_page = 100
+    offset = (page - 1) * per_page
+
     try:
-        conn = get_db_connection()
-        query = "SELECT document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location FROM printer_logs"
-        df = pd.read_sql_query(query, conn)
-        conn.close()
+        engine = get_sqlalchemy_engine()
+        count_query = "SELECT COUNT(*) FROM printer_logs"
+        with engine.connect() as conn:
+            total_rows = conn.execute(text(count_query)).scalar()
+        total_pages = (total_rows + per_page - 1) // per_page
+
+        query = f"""
+            SELECT document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location
+            FROM printer_logs
+            ORDER BY date DESC
+            OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
+        """
+        df = pd.read_sql_query(query, engine)
+        engine.dispose()
+
         # Format date column as string for display with date and time
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
@@ -497,41 +514,85 @@ def view():
 
 @app.route('/dashboard')
 def dashboard():
-    return render_template("dashboard.html")
+    import datetime
+    time_filter = request.args.get('time_filter', 'all')
+    location_filter = request.args.get('location_filter', 'all')
+    date_input = request.args.get('date_input', None)
 
-# -------------------------------
-# REST API ENDPOINTS
-# -------------------------------
-@app.route('/api/upload', methods=['POST'])
-def api_upload():
-    file = request.files.get('file')
-    if not file:
-        return jsonify({'error': 'No file uploaded'}), 400
-    try:
-        create_table_if_not_exists()
-        df = process_file(file)
-        duplicates = insert_data_to_db(df)
-        return jsonify({
-            'message': f"{len(df)} rows inserted. {len(duplicates)} duplicates skipped.",
-            'duplicates': duplicates[:5]  # preview
-        }), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    # Set default date_input based on time_filter if not provided
+    if not date_input:
+        now = datetime.datetime.now()
+        if time_filter == 'daily':
+            date_input = now.strftime('%Y-%m-%d')
+        elif time_filter == 'monthly':
+            date_input = now.strftime('%Y-%m')
+        elif time_filter == 'yearly':
+            date_input = str(now.year)
 
-@app.route('/api/logs', methods=['GET'])
-def api_logs():
     try:
         engine = get_sqlalchemy_engine()
-        df = pd.read_sql("SELECT * FROM printer_logs", engine)
+        query = "SELECT user_name, printer_model, location, pages_printed, date FROM printer_logs"
+        df = pd.read_sql_query(query, engine)
         engine.dispose()
-        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d %H:%M:%S')
-        return jsonify(df.to_dict(orient='records'))
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-# -------------------------------
-# RUN THE APP ON NETWORK
-# -------------------------------
+        # Convert 'date' column to datetime
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+        # Filter by location if applicable
+        if location_filter != 'all':
+            df = df[df['location'] == location_filter]
+
+        # Filter by time
+        if time_filter == 'daily' and date_input:
+            filter_date = pd.to_datetime(date_input, errors='coerce')
+            if not pd.isna(filter_date):
+                df = df[df['date'].dt.date == filter_date.date()]
+        elif time_filter == 'monthly' and date_input:
+            filter_date = pd.to_datetime(date_input, errors='coerce')
+            if not pd.isna(filter_date):
+                df = df[(df['date'].dt.year == filter_date.year) & (df['date'].dt.month == filter_date.month)]
+        elif time_filter == 'yearly' and date_input:
+            filter_year = None
+            try:
+                filter_year = int(date_input)
+            except:
+                filter_year = None
+            if filter_year:
+                df = df[df['date'].dt.year == filter_year]
+        # else 'all' no filter
+
+        # Compute top users by pages printed
+        top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
+
+        # Compute top printers by pages printed
+        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
+
+        # Compute least used printers by pages printed
+        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10).to_dict()
+
+        # Get unique locations for filter dropdown
+        locations = sorted(df['location'].dropna().unique())
+
+        # Pass the filtered data to template
+        data = df
+
+    except Exception as e:
+        top_users = {}
+        top_printers = {}
+        least_printers = {}
+        locations = []
+        data = None
+
+    return render_template('dashboard.html',
+                           top_users=top_users,
+                           top_printers=top_printers,
+                           least_printers=least_printers,
+                           locations=locations,
+                           data=data,
+                           time_filter=time_filter,
+                           location_filter=location_filter,
+                           date_input=date_input)
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)
