@@ -15,7 +15,10 @@
     } else if (timeFilter === 'monthly') {
       dateInput.type = 'month';
       dateInputWrapper.classList.remove('d-none');
-    } else if (timeFilter === 'yearly') {
+    } else if (timeFilter === 'daily' || timeFilter === 'weekly') {
+      dateInput.type = 'date';
+      dateInputWrapper.classList.remove('d-none');
+    }else if (timeFilter === 'yearly') {
       dateInput.type = 'number';
       dateInput.min = '2000';
       dateInput.max = '2100';
@@ -42,6 +45,7 @@
       <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
         <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All</option>
         <option value="daily" {% if time_filter == 'daily' %}selected{% endif %}>Daily</option>
+        <option value="weekly" {% if time_filter == 'weekly' %}selected{% endif %}>Weekly</option>
         <option value="monthly" {% if time_filter == 'monthly' %}selected{% endif %}>Monthly</option>
         <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
       </select>
@@ -58,7 +62,7 @@
     </div>
 
     <div class="col-md-3 d-none" id="date_input_wrapper">
-      <label for="date_input" class="form-label">Date / Month / Year</label>
+      <label for="date_input" class="form-label">Date / Week/ Month / Year</label>
       <input name="date_input" id="date_input" value="{{ date_input or '' }}" class="form-control">
     </div>
 
