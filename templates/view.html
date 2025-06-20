@@ -6,20 +6,35 @@
   <h2 class="mb-4 text-center">📄 Uploaded Printer Logs</h2>
 
   {% if data is not none %}
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+
     <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
-      <table class="table table-bordered table-striped table-hover align-middle">
+      <table id="data-table" class="table table-bordered table-striped table-hover align-middle">
         <thead class="table-dark">
+          <!-- Header row -->
           <tr>
             <th>Sr No</th>
             {% for col in data.columns %}
               <th>{{ col|title }}</th>
             {% endfor %}
           </tr>
+          <!-- Filter dropdowns row -->
+          <tr class="filter-row">
+            <th></th>
+            {% for col in data.columns %}
+              <th>
+                <select class="column-filter form-select form-select-sm">
+                  <option value="">All</option>
+                </select>
+              </th>
+            {% endfor %}
+          </tr>
         </thead>
         <tbody>
           {% for row in data.itertuples() %}
           <tr>
-            <td>{{ loop.index }}</td>
+            <td>{{ (page - 1) * 100 + loop.index }}</td>
             {% for val in row[1:] %}  
               <td>{{ val }}</td>
             {% endfor %}
@@ -28,6 +43,51 @@
         </tbody>
       </table>
     </div>
+
+    <!-- jQuery & DataTables JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+    <!-- DataTables Dropdown Filter Script -->
+    <script>
+      $(document).ready(function() {
+        var table = $('#data-table').DataTable({
+          initComplete: function () {
+            this.api().columns().every(function (index) {
+              // Skip Sr No column
+              if (index === 0) return;
+
+              var column = this;
+              var select = $('.filter-row th').eq(index).find('select');
+
+              var uniqueValues = new Set();
+              column.data().each(function (d) {
+                uniqueValues.add(d);
+              });
+
+              Array.from(uniqueValues).sort().forEach(function (val) {
+                select.append('<option value="' + val + '">' + val + '</option>');
+              });
+
+              select.on('change', function () {
+                var val = $.fn.dataTable.util.escapeRegex($(this).val());
+                column.search(val ? '^' + val + '$' : '', true, false).draw();
+              });
+            });
+          }
+        });
+      });
+    </script>
+
+    <!-- Optional: Styling -->
+    <style>
+      .filter-row select {
+        width: 100%;
+        padding: 2px 4px;
+        font-size: 0.875rem;
+      }
+    </style>
+
   {% else %}
     <div class="alert alert-warning text-center">
       No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
