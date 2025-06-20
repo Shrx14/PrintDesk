@@ -6,16 +6,18 @@
   <div class="upload-wrapper">
     <h3>Upload Data (Excel)</h3>
     <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
-      
-      <br><br>
+       <div class="mt-3">
+      <a href="{{ url_for('static', filename='demo excel/demo_Excel.xlsx') }}" download class="btn btn-outline-primary" style="font-weight: 600; padding: 10px 20px; border-radius: 8px; text-decoration: none;">
+        📥 Download Demo Excel File
+      </a>
+    </div>
+
       <input type="file" name="file" required>
       <br>
       <input type="submit" value="Upload">
     </form>
 
-    <div class="mt-3">
-      <a href="{{ url_for('static', filename='demo excel/demo_Excel.xlsx') }}" download>Download Demo Excel File</a>
-    </div>
+   
 
     {% with messages = get_flashed_messages() %}
       {% if messages %}
