@@ -5,7 +5,7 @@
 {% block content %}
   <div class="upload-wrapper">
     <h3>Upload Data (Excel)</h3>
-    <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+    <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
       <label for="upload_type">Select Upload Type:</label><br>
       <select name="upload_type" id="upload_type" required>
         <option value="printer_logs">Printer Logs</option>
@@ -14,7 +14,10 @@
       <br><br>
       <input type="file" name="file" required>
       <br>
-      <input type="submit" value="Upload">
+      <input type="submit" id="uploadButton" value="Upload">
+      <div id="uploadingText" style="display:none; font-weight: 600; color: #4f46e5; font-size: 1.1rem;">
+        Uploading<span id="dots">...</span>
+      </div>
     </form>
 
     {% with messages = get_flashed_messages() %}
@@ -103,5 +106,31 @@
       font-weight: 500;
       text-align: left;
     }
+
+    /* Uploading text animation */
+    #uploadingText {
+      font-weight: 600;
+      color: #4f46e5;
+      font-size: 1.1rem;
+    }
   </style>
+
+  <script>
+    // Animate dots in "Uploading..."
+    let dotsInterval;
+    function startDotsAnimation() {
+      const dots = document.getElementById('dots');
+      let count = 0;
+      dotsInterval = setInterval(() => {
+        count = (count + 1) % 4;
+        dots.textContent = '.'.repeat(count);
+      }, 500);
+    }
+
+    document.getElementById('uploadForm').addEventListener('submit', function() {
+      document.getElementById('uploadButton').style.display = 'none';
+      document.getElementById('uploadingText').style.display = 'inline';
+      startDotsAnimation();
+    });
+  </script>
 {% endblock %}
