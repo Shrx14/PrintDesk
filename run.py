@@ -2,6 +2,8 @@ from flask import Flask, request, render_template, redirect, url_for, flash
 import pandas as pd
 from io import BytesIO
 import pyodbc
+from sqlalchemy import create_engine
+import urllib
 
 SQL_DRIVER = '{ODBC Driver 18 for SQL Server}'
 SQL_SERVER = '10.3.2.121,63973'
@@ -19,6 +21,29 @@ def get_db_connection():
         'TrustServerCertificate=yes;'
     )
     return pyodbc.connect(conn_str)
+
+from sqlalchemy.pool import QueuePool
+from sqlalchemy import text
+
+def get_sqlalchemy_engine():
+    params = urllib.parse.quote_plus(
+        f'DRIVER={SQL_DRIVER};'
+        f'SERVER={SQL_SERVER};'
+        f'DATABASE={SQL_DATABASE};'
+        f'UID={SQL_USERNAME};'
+        f'PWD={SQL_PASSWORD};'
+        'TrustServerCertificate=yes;'
+    )
+    engine = create_engine(
+        f'mssql+pyodbc:///?odbc_connect={params}',
+        poolclass=QueuePool,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800,
+        connect_args={'timeout': 30}
+    )
+    return engine
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -85,41 +110,62 @@ def create_printer_data_table_if_not_exists():
         from flask import flash
         flash(f"Error creating printer_data table: {e}")
 
+import time
+
 def insert_data_to_db(df):
     duplicates = []
     logging.info(f"Starting insert_data_to_db with {len(df)} rows")
     conn = get_db_connection()
     cursor = conn.cursor()
-    check_sql = """
-    SELECT COUNT(*) FROM printer_logs 
-    WHERE user_name = ? AND document_name = ? AND hostname = ? AND date = ?
-    """
     insert_sql = """
     INSERT INTO printer_logs 
     (document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
-    inserted_count = 0
+    batch_size = 1000
+    batch_params = []
     # Filter out rows with missing or empty hostname
     df_filtered = df[df['hostname'].notnull() & (df['hostname'] != '')]
+
+    # Prepare a set of existing keys to check duplicates in bulk
+    existing_keys = set()
+    try:
+        cursor.execute("SELECT user_name, document_name, hostname, date FROM printer_logs")
+        rows = cursor.fetchall()
+        for r in rows:
+            # r[3] is datetime object
+            existing_keys.add((r[0], r[1], r[2], r[3]))
+    except Exception as e:
+        logging.error(f"Error fetching existing keys: {e}")
+
+    inserted_count = 0
+
+    def execute_with_retry(func, max_retries=3, delay=5):
+        for attempt in range(max_retries):
+            try:
+                return func()
+            except Exception as e:
+                if '08S01' in str(e) or 'Communication link failure' in str(e):
+                    logging.warning(f"Transient connection error on attempt {attempt+1}/{max_retries}: {e}")
+                    time.sleep(delay * (2 ** attempt))  # Exponential backoff
+                else:
+                    raise
+        raise Exception("Max retries exceeded for database operation due to connection issues.")
+
     for idx, row in df_filtered.iterrows():
         user_name = row['user name']
         document_name = row['document name']
         hostname = row['hostname']
         pages_printed = int(row['pages printed'])
-        date_val = row['date'].strftime('%Y-%m-%d %H:%M:%S') if pd.notnull(row['date']) else None
+        date_val = row['date'] if pd.notnull(row['date']) else None
         month = row['month']
         week_1 = row['week_1']
         printer_model = row.get('printer_model', None)
         division = row.get('division', None)
         location = row.get('location', None)
 
-        logging.info(f"Row {idx}: Checking duplicate for user_name={user_name}, document_name={document_name}, hostname={hostname}, date={date_val}")
-        cursor.execute(check_sql, (user_name, document_name, hostname, date_val))
-        count = cursor.fetchone()[0]
-        logging.info(f"Row {idx}: Duplicate count: {count}")
-
-        if count > 0:
+        key = (user_name, document_name, hostname, date_val)
+        if key in existing_keys:
             duplicates.append({
                 'user_name': user_name,
                 'document_name': document_name,
@@ -134,14 +180,53 @@ def insert_data_to_db(df):
             })
             logging.info(f"Row {idx}: Duplicate found, skipping insert.")
         else:
-            logging.info(f"Row {idx}: Inserting row: {row.to_dict()}")
-            cursor.execute(insert_sql, (
+            batch_params.append((
                 document_name, user_name, hostname, 
                 pages_printed, date_val,
                 month, week_1, printer_model, division, location
             ))
             inserted_count += 1
-    conn.commit()
+
+        if len(batch_params) >= batch_size:
+            try:
+                execute_with_retry(lambda: cursor.executemany(insert_sql, batch_params))
+                conn.commit()
+                batch_params = []
+            except Exception as e:
+                # On batch insert error, fallback to row-by-row insert with duplicate skipping and retry
+                logging.error(f"Batch insert error: {e}. Falling back to row-by-row insert.")
+                for i, params in enumerate(batch_params):
+                    try:
+                        execute_with_retry(lambda: cursor.execute(insert_sql, params))
+                        conn.commit()
+                        inserted_count += 1
+                    except Exception as ex:
+                        if 'unique_all_columns' in str(ex):
+                            logging.info(f"Row-by-row insert: Duplicate detected, skipping.")
+                        else:
+                            logging.error(f"Row-by-row insert error: {ex}")
+                            raise ex
+                batch_params = []
+
+    # Insert remaining batch
+    if batch_params:
+        try:
+            execute_with_retry(lambda: cursor.executemany(insert_sql, batch_params))
+            conn.commit()
+        except Exception as e:
+            logging.error(f"Batch insert error: {e}. Falling back to row-by-row insert.")
+            for i, params in enumerate(batch_params):
+                try:
+                    execute_with_retry(lambda: cursor.execute(insert_sql, params))
+                    conn.commit()
+                    inserted_count += 1
+                except Exception as ex:
+                    if 'unique_all_columns' in str(ex):
+                        logging.info(f"Row-by-row insert: Duplicate detected, skipping.")
+                    else:
+                        logging.error(f"Row-by-row insert error: {ex}")
+                        raise ex
+
     cursor.close()
     conn.close()
     logging.info(f"Inserted {inserted_count} rows into 'printer_logs' table successfully. {len(duplicates)} duplicates skipped.")
@@ -167,6 +252,12 @@ def upload():
             df = pd.read_excel(in_memory_file)
 
             if upload_type == 'printer_logs':
+                # Limit rows to 5000 to avoid connection issues
+                max_rows = 5000
+                if len(df) > max_rows:
+                    flash(f"Upload file exceeds maximum allowed rows of {max_rows}. Please split your file and upload in parts.")
+                    return redirect(url_for('upload'))
+
                 # Normalize column names (strip and lowercase)
                 df.columns = [col.strip().lower() for col in df.columns]
                 # Expected columns for printer logs
@@ -245,10 +336,10 @@ def upload():
                 df['week_1'] = df['week_1'].apply(lambda x: f"Week {x}")
 
                 # Query printer_data table from database to get printer model, division, location by matching hostname
-                conn = get_db_connection()
+                engine = get_sqlalchemy_engine()
                 query = "SELECT hostname, division, printer_model, location FROM printer_data"
-                printer_data_db = pd.read_sql_query(query, conn)
-                conn.close()
+                printer_data_db = pd.read_sql_query(query, engine)
+                engine.dispose()
 
                 # Normalize hostname columns for matching
                 printer_data_db['hostname'] = printer_data_db['hostname'].str.strip().str.lower()
@@ -387,21 +478,39 @@ def upload():
 
     return render_template('upload.html')
 
+from flask import request
+
 @app.route('/view')
 def view():
+    page = request.args.get('page', default=1, type=int)
+    per_page = 100
+    offset = (page - 1) * per_page
+
     try:
-        conn = get_db_connection()
-        query = "SELECT document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location FROM printer_logs"
-        df = pd.read_sql_query(query, conn)
-        conn.close()
+        engine = get_sqlalchemy_engine()
+        count_query = "SELECT COUNT(*) FROM printer_logs"
+        with engine.connect() as conn:
+            total_rows = conn.execute(text(count_query)).scalar()
+        total_pages = (total_rows + per_page - 1) // per_page
+
+        query = f"""
+            SELECT document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location
+            FROM printer_logs
+            ORDER BY date DESC
+            OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
+        """
+        df = pd.read_sql_query(query, engine)
+        engine.dispose()
+
         # Format date column as string for display with date and time
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
     except Exception as e:
         flash(f"Error retrieving data from database: {e}")
         df = None
+        total_pages = 0
 
-    return render_template('view.html', data=df)
+    return render_template('view.html', data=df, page=page, total_pages=total_pages)
 
 @app.route('/dashboard')
 def dashboard():
@@ -421,10 +530,10 @@ def dashboard():
             date_input = str(now.year)
 
     try:
-        conn = get_db_connection()
+        engine = get_sqlalchemy_engine()
         query = "SELECT user_name, printer_model, location, pages_printed, date FROM printer_logs"
-        df = pd.read_sql_query(query, conn)
-        conn.close()
+        df = pd.read_sql_query(query, engine)
+        engine.dispose()
 
         # Convert 'date' column to datetime
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
