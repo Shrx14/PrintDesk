@@ -611,6 +611,12 @@ def dashboard():
         # Pass the filtered data to template
         data = df
 
+        # Add flash message if no data found for filters
+        if data.empty:
+            from flask import flash
+            # Remove flash message to avoid duplicate display
+            # flash("No data found for the selected filters.")
+
     except Exception as e:
         logging.error(f"Error in dashboard route: {e}")
         logging.error(traceback.format_exc())

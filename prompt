@@ -2,4 +2,4 @@ i want to develop a website for an industry to analyze and display the data of p
 pip install numpy pandas flask pyodbc openpyxl 
 python vscode git power bi sql server mngmt studio 21 odbc 
 pip install sqlalchemy
-6 and 25 
+10 and 25 
