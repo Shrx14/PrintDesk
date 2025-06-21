@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Management{% endblock %}
+
+{% block content %}
+<h2 class="mb-4 text-center">👑 Admin User Management</h2>
+
+<div class="container">
+  <!-- Add New User Form -->
+  <div class="card mb-4 shadow-sm">
+    <div class="card-header bg-primary text-white">Add New User</div>
+    <div class="card-body">
+      <form id="addUserForm" class="row g-3 align-items-center">
+        <div class="col-md-4">
+          <label for="newUsername" class="form-label">Username</label>
+          <input type="text" id="newUsername" class="form-control" placeholder="Enter username" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Permissions</label>
+          <div class="form-check form-check-inline ms-3">
+            <input class="form-check-input" type="checkbox" id="permView" value="view">
+            <label class="form-check-label" for="permView">View</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="permUpload" value="upload">
+            <label class="form-check-label" for="permUpload">Upload</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="permAdmin" value="admin">
+            <label class="form-check-label" for="permAdmin">Admin</label>
+          </div>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-success w-100">Add User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Existing Users Table -->
+  <div class="card shadow-sm">
+    <div class="card-header bg-secondary text-white">Manage Existing Users</div>
+    <div class="card-body">
+      <form id="userPermissionsForm">
+        <table class="table table-striped align-middle">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th class="text-center">View</th>
+              <th class="text-center">Upload</th>
+              <th class="text-center">Admin</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <!-- Example static users, replace with dynamic data -->
+            <tr>
+              <td>alice</td>
+              <td class="text-center">
+                <input type="checkbox" name="alice_view" checked>
+              </td>
+              <td class="text-center">
+                <input type="checkbox" name="alice_upload">
+              </td>
+              <td class="text-center">
+                <input type="checkbox" name="alice_admin">
+              </td>
+            </tr>
+            <tr>
+              <td>bob</td>
+              <td class="text-center">
+                <input type="checkbox" name="bob_view" checked>
+              </td>
+              <td class="text-center">
+                <input type="checkbox" name="bob_upload" checked>
+              </td>
+              <td class="text-center">
+                <input type="checkbox" name="bob_admin">
+              </td>
+            </tr>
+            <tr>
+              <td>charlie</td>
+              <td class="text-center">
+                <input type="checkbox" name="charlie_view">
+              </td>
+              <td class="text-center">
+                <input type="checkbox" name="charlie_upload">
+              </td>
+              <td class="text-center">
+                <input type="checkbox" name="charlie_admin" checked>
+              </td>
+            </tr>
+            <!-- Add more rows dynamically -->
+          </tbody>
+        </table>
+        <div class="text-end">
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Example JS to handle adding a user to the table (frontend only)
+  document.getElementById('addUserForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const username = document.getElementById('newUsername').value.trim();
+    if (!username) return alert('Please enter a username.');
+
+    const view = document.getElementById('permView').checked;
+    const upload = document.getElementById('permUpload').checked;
+    const admin = document.getElementById('permAdmin').checked;
+
+    // Prevent duplicate usernames (basic check)
+    const existingUser = Array.from(document.querySelectorAll('#usersTableBody tr td:first-child'))
+                              .some(td => td.textContent === username);
+    if (existingUser) {
+      alert('User already exists.');
+      return;
+    }
+
+    const tbody = document.getElementById('usersTableBody');
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td>${username}</td>
+      <td class="text-center"><input type="checkbox" name="${username}_view" ${view ? 'checked' : ''}></td>
+      <td class="text-center"><input type="checkbox" name="${username}_upload" ${upload ? 'checked' : ''}></td>
+      <td class="text-center"><input type="checkbox" name="${username}_admin" ${admin ? 'checked' : ''}></td>
+    `;
+
+    tbody.appendChild(tr);
+
+    // Clear the add user form
+    document.getElementById('addUserForm').reset();
+  });
+
+  // You can add form submission logic here to send data to backend...
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+body {
+  background-color: #121212;
+  font-family: 'Poppins', sans-serif;
+  color: #cfd8dc;
+  margin: 0;
+  padding: 3rem 1rem;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.container {
+  background-color: #1e1e1e;
+  border-radius: 16px;
+  max-width: 900px;
+  width: 100%;
+  padding: 2.5rem 3rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
+  box-sizing: border-box;
+}
+
+h2.mb-4 {
+  font-weight: 600;
+  font-size: 2.4rem;
+  text-align: center;
+  margin-bottom: 2rem;
+  color: #eceff1;
+  letter-spacing: 0.05em;
+}
+
+form.row.g-3 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  justify-content: space-between;
+  margin-bottom: 3rem;
+}
+
+form .col-md-3 {
+  flex: 1 1 30%;
+  min-width: 200px;
+}
+
+label.form-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+  color: #90a4ae;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  user-select: none;
+}
+
+input.form-control,
+select.form-select {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-radius: 10px;
+  border: 1.5px solid #37474f;
+  background-color: #263238;
+  color: #eceff1;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.25s ease;
+}
+
+input.form-control::placeholder {
+  color: #78909c;
+}
+
+input.form-control:focus,
+select.form-select:focus {
+  border-color: #4fc3f7;
+  box-shadow: 0 0 6px #4fc3f7a0;
+  background-color: #37474f;
+  color: #f0f4f8;
+}
+
+.d-none {
+  display: none !important;
+}
+
+button.btn {
+  width: 100%;
+  cursor: pointer;
+  padding: 0.6rem 1.6rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 14px;
+  border: none;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #eceff1;
+  background-color: #0288d1;
+  box-shadow: 0 4px 12px #0288d1aa;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  user-select: none;
+}
+
+button.btn:hover {
+  background-color: #039be5;
+  box-shadow: 0 6px 18px #039be5cc;
+  transform: translateY(-2px);
+}
+
+button.btn-outline-secondary {
+  background: transparent;
+  color: #4fc3f7;
+  border: 2px solid #4fc3f7;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button.btn-outline-secondary:hover {
+  background-color: #4fc3f7;
+  color: #121212;
+  box-shadow: 0 6px 18px #4fc3f7cc;
+  transform: translateY(-2px);
+}
+
+button.btn-outline-info {
+  background: transparent;
+  color: #82b1ff;
+  border: 2px solid #82b1ff;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button.btn-outline-info:hover {
+  background-color: #82b1ff;
+  color: #121212;
+  box-shadow: 0 6px 18px #82b1ffcc;
+  transform: translateY(-2px);
+}
+
+.card {
+  background-color: #263238;
+  border-radius: 16px;
+  padding: 1.8rem 2rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  transition: transform 0.3s ease;
+  border: 1.5px solid #37474f;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 36px rgba(3, 155, 229, 0.5);
+}
+
+.card-header {
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: #b0bec5;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  user-select: none;
+}
+
+.list-group-flush {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.list-group-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.65rem 0.8rem;
+  color: #cfd8dccc;
+  font-weight: 500;
+  border-bottom: 1px solid #37474f;
+  border-radius: 8px;
+  background-color: #37474f;
+  margin-bottom: 0.35rem;
+  transition: background-color 0.2s ease;
+  cursor: default;
+}
+
+.list-group-item:hover {
+  background-color: #455a64;
+  color: #eceff1;
+}
+
+@media (max-width: 720px) {
+  form.row.g-3 {
+    flex-direction: column;
+  }
+  form .col-md-3 {
+    width: 100%;
+  }
+  .card {
+    padding: 1.4rem 1.6rem;
+  }
+}
+
+</style>
+
+
+{% endblock %}
