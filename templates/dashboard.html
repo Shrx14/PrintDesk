@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<script>
+  function updateDateInputVisibility() {
+    const timeFilter = document.getElementById('time_filter').value;
+    const dateInputWrapper = document.getElementById('date_input_wrapper');
+    const monthInputWrapper = document.getElementById('month_input_wrapper');
+    const weekSelectWrapper = document.getElementById('week_select_wrapper');
+    const yearInputWrapper = document.getElementById('year_input_wrapper');
+
+    if (timeFilter === 'daily') {
+      dateInputWrapper.classList.remove('d-none');
+      monthInputWrapper.classList.add('d-none');
+      weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.add('d-none');
+    } else if (timeFilter === 'weekly') {
+      dateInputWrapper.classList.add('d-none');
+      monthInputWrapper.classList.remove('d-none');  // Show month input for weekly filter
+      weekSelectWrapper.classList.remove('d-none');
+      yearInputWrapper.classList.add('d-none');
+    } else if (timeFilter === 'monthly') {
+      dateInputWrapper.classList.add('d-none');
+      monthInputWrapper.classList.remove('d-none');
+      weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.add('d-none');
+    } else if (timeFilter === 'yearly') {
+      dateInputWrapper.classList.add('d-none');
+      monthInputWrapper.classList.add('d-none');
+      weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.remove('d-none');
+    } else {
+      dateInputWrapper.classList.add('d-none');
+      monthInputWrapper.classList.add('d-none');
+      weekSelectWrapper.classList.add('d-none');
+      yearInputWrapper.classList.add('d-none');
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', updateDateInputVisibility);
+</script>
+
+<h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for message in messages %}
+        <div class="alert alert-info text-center" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% if data is none %}
+  <div class="alert alert-warning text-center">
+    No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
+  </div>
+{% else %}
+  {% if data.empty %}
+    <div class="alert alert-info text-center">
+      No data found for the selected filters.
+    </div>
+  {% endif %}
+  <form id="filterForm" method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
+    <div class="col-md-3">
+      <label for="time_filter" class="form-label">Filter by Time</label>
+      <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
+        <option value="all" {% if time_filter == 'all' %}selected{% endif %}>All</option>
+        <option value="daily" {% if time_filter == 'daily' %}selected{% endif %}>Daily</option>
+        <option value="weekly" {% if time_filter == 'weekly' %}selected{% endif %}>Weekly</option>
+        <option value="monthly" {% if time_filter == 'monthly' %}selected{% endif %}>Monthly</option>
+        <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
+      </select>
+    </div>
+    <div class="col-md-3 d-flex align-items-center">
+      <a href="{{ url_for('dashboard_export', time_filter=time_filter, location_filter=location_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success ms-3">
+        ⬇️ Export to Excel
+      </a>
+    </div>
+
+  <div class="col-md-3">
+    <label for="location_filter" class="form-label">Filter by Location</label>
+    <select id="location_filter" name="location_filter" class="form-select">
+      <option value="all" {% if location_filter == 'all' %}selected{% endif %}>All</option>
+      {% for loc in locations %}
+        <option value="{{ loc }}" {% if location_filter == loc %}selected{% endif %}>{{ loc }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="col-md-3 d-none" id="date_input_wrapper">
+    <label for="date_input" class="form-label">Date</label>
+    <input name="date_input" id="date_input" type="date" value="{{ date_input or '' }}" class="form-control">
+  </div>
+
+  <div class="col-md-3 d-none" id="month_input_wrapper">
+    <label for="month_input" class="form-label">Month</label>
+    <input name="month_input" id="month_input" type="month" value="{{ month_input or '' }}" class="form-control">
+  </div>
+
+  <div class="col-md-3 d-none" id="week_select_wrapper">
+    <label for="week_select" class="form-label">Week</label>
+    <select id="week_select" name="week_select" class="form-select">
+      <option value="1" {% if week_select == '1' %}selected{% endif %}>Week 1</option>
+      <option value="2" {% if week_select == '2' %}selected{% endif %}>Week 2</option>
+      <option value="3" {% if week_select == '3' %}selected{% endif %}>Week 3</option>
+      <option value="4" {% if week_select == '4' %}selected{% endif %}>Week 4</option>
+      <option value="5" {% if week_select == '5' %}selected{% endif %}>Week 5</option>
+    </select>
+  </div>
+
+  <div class="col-md-3 d-none" id="year_input_wrapper">
+    <label for="year_input" class="form-label">Year</label>
+    <input name="year_input" id="year_input" type="number" min="2000" max="2100" value="{{ year_input or '' }}" class="form-control">
+  </div>
+
+  <div class="col-md-3 text-end">
+    <button id="applyFiltersBtn" type="submit" class="btn btn-primary">
+      Apply Filters
+      <span id="loadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+    </button>
+  </div>
+</form>
+
+<div class="row g-4">
+  <div class="col-md-4">
+    <div class="card border-primary shadow-sm">
+      <div class="card-header bg-primary text-white">Top 10 Users</div>
+      <ul class="list-group list-group-flush">
+        {% for user, pages in top_users.items() %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card border-success shadow-sm">
+      <div class="card-header bg-success text-white">Top 10 Printers</div>
+      <ul class="list-group list-group-flush">
+        {% for printer, pages in top_printers.items() %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card border-danger shadow-sm">
+      <div class="card-header bg-danger text-white">Least Used Printers</div>
+      <ul class="list-group list-group-flush">
+        {% for printer, pages in least_printers.items() %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  document.getElementById('filterForm').addEventListener('submit', function() {
+    const btn = document.getElementById('applyFiltersBtn');
+    const spinner = document.getElementById('loadingSpinner');
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+  });
+</script>
+{% endblock %}
