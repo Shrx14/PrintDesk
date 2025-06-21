@@ -47,7 +47,7 @@ def get_sqlalchemy_engine():
 
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -65,12 +65,12 @@ def create_table_if_not_exists():
         pages_printed INT,
         date DATETIME,
         month NVARCHAR(50),
-        week_1 NVARCHAR(50),
+        week NVARCHAR(50),
         printer_model NVARCHAR(255),
         division NVARCHAR(255),
         location NVARCHAR(255),
         CONSTRAINT unique_all_columns UNIQUE (
-            user_name, document_name, hostname, pages_printed, date, month, week_1, printer_model, division, location
+            user_name, document_name, hostname, pages_printed, date, month, week, printer_model, division, location
         )
     )
     """
@@ -123,7 +123,7 @@ def insert_data_to_db(df):
     cursor = conn.cursor()
     insert_sql = """
     INSERT INTO printer_logs 
-    (document_name, user_name, hostname, pages_printed, date, month, week_1, printer_model, division, location)
+    (document_name, user_name, hostname, pages_printed, date, month, week, printer_model, division, location)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     batch_size = 1000
@@ -143,93 +143,134 @@ def insert_data_to_db(df):
         logging.error(f"Error fetching existing keys: {e}")
 
     inserted_count = 0
+    last_inserted_idx = -1  # Track last inserted row index for resume on failure
 
-    def execute_with_retry(func, max_retries=3, delay=5):
+    def execute_with_retry(func, max_retries=5, delay=10):
         for attempt in range(max_retries):
             try:
                 return func()
             except Exception as e:
                 if '08S01' in str(e) or 'Communication link failure' in str(e):
                     logging.warning(f"Transient connection error on attempt {attempt+1}/{max_retries}: {e}")
-                    time.sleep(delay * (2 ** attempt))  # Exponential backoff
+                    time.sleep(delay * (2 ** attempt))  # Exponential backoff with longer base delay
                 else:
                     raise
         raise Exception("Max retries exceeded for database operation due to connection issues.")
 
-    for idx, row in df_filtered.iterrows():
-        user_name = row['user name']
-        document_name = row['document name']
-        hostname = row['hostname']
-        pages_printed = int(row['pages printed'])
-        date_val = row['date'] if pd.notnull(row['date']) else None
-        month = row['month']
-        week_1 = row['week_1']
-        printer_model = row.get('printer_model', None)
-        division = row.get('division', None)
-        location = row.get('location', None)
+    def truncate_string(s, max_length):
+        if s is None:
+            return None
+        s = str(s)
+        if len(s) > max_length:
+            logging.warning(f"Truncating string from length {len(s)} to {max_length}: {s}")
+            return s[:max_length]
+        return s
 
-        key = (user_name, document_name, hostname, date_val)
-        if key in existing_keys:
-            duplicates.append({
-                'user_name': user_name,
-                'document_name': document_name,
-                'hostname': hostname,
-                'pages_printed': pages_printed,
-                'date': date_val,
-                'month': month,
-                'week_1': week_1,
-                'printer_model': printer_model,
-                'division': division,
-                'location': location
-            })
-            logging.info(f"Row {idx}: Duplicate found, skipping insert.")
-        else:
-            batch_params.append((
-                document_name, user_name, hostname, 
-                pages_printed, date_val,
-                month, week_1, printer_model, division, location
-            ))
-            inserted_count += 1
+    idx = 0
+    total_rows = len(df_filtered)
+    while idx < total_rows:
+        batch_params = []
+        batch_end = min(idx + batch_size, total_rows)
+        for i in range(idx, batch_end):
+            row = df_filtered.iloc[i]
+            user_name = truncate_string(row['user name'], 255)
+            document_name = truncate_string(row['document name'], 255)
+            hostname = truncate_string(row['hostname'], 255)
+            pages_printed = int(row['pages printed'])
+            date_val = row['date'] if pd.notnull(row['date']) else None
+            month = truncate_string(row['month'], 50)
+            week = truncate_string(row['week'], 50)
+            printer_model = truncate_string(row.get('printer_model', None), 255)
+            division = truncate_string(row.get('division', None), 255)
+            location = truncate_string(row.get('location', None), 255)
 
-        if len(batch_params) >= batch_size:
-            try:
-                execute_with_retry(lambda: cursor.executemany(insert_sql, batch_params))
-                conn.commit()
-                batch_params = []
-            except Exception as e:
-                # On batch insert error, fallback to row-by-row insert with duplicate skipping and retry
-                logging.error(f"Batch insert error: {e}. Falling back to row-by-row insert.")
-                for i, params in enumerate(batch_params):
-                    try:
-                        execute_with_retry(lambda: cursor.execute(insert_sql, params))
-                        conn.commit()
-                        inserted_count += 1
-                    except Exception as ex:
-                        if 'unique_all_columns' in str(ex):
-                            logging.info(f"Row-by-row insert: Duplicate detected, skipping.")
-                        else:
-                            logging.error(f"Row-by-row insert error: {ex}")
-                            raise ex
-                batch_params = []
+            # Calculate original Excel row number (considering header rows)
+            original_row_num = row.name + 2  # +2 to account for header row and 0-based index
 
-    # Insert remaining batch
-    if batch_params:
+            # Log lengths of string fields to detect truncation issues
+            logging.debug(f"Row {i} (Excel row {original_row_num}) lengths: user_name={len(str(user_name))}, document_name={len(str(document_name))}, hostname={len(str(hostname))}, month={len(str(month))}, week={len(str(week))}, printer_model={len(str(printer_model))}, division={len(str(division))}, location={len(str(location))}")
+
+            key = (user_name, document_name, hostname, date_val)
+            if key in existing_keys:
+                duplicates.append({
+                    'user_name': user_name,
+                    'document_name': document_name,
+                    'hostname': hostname,
+                    'pages_printed': pages_printed,
+                    'date': date_val,
+                    'month': month,
+                    'week': week,
+                    'printer_model': printer_model,
+                    'division': division,
+                    'location': location
+                })
+                logging.info(f"Row {i} (Excel row {original_row_num}): Duplicate found, skipping insert.")
+            else:
+                batch_params.append((
+                    document_name, user_name, hostname,
+                    pages_printed, date_val,
+                    month, week, printer_model, division, location
+                ))
+
         try:
             execute_with_retry(lambda: cursor.executemany(insert_sql, batch_params))
             conn.commit()
+            inserted_count += len(batch_params)
+            last_inserted_idx = batch_end - 1
+            idx = batch_end
         except Exception as e:
             logging.error(f"Batch insert error: {e}. Falling back to row-by-row insert.")
-            for i, params in enumerate(batch_params):
+            # Row-by-row insert with resume support
+            for i in range(idx, total_rows):
+                row = df_filtered.iloc[i]
+                user_name = truncate_string(row['user name'], 255)
+                document_name = truncate_string(row['document name'], 255)
+                hostname = truncate_string(row['hostname'], 255)
+                pages_printed = int(row['pages printed'])
+                date_val = row['date'] if pd.notnull(row['date']) else None
+                month = truncate_string(row['month'], 50)
+                week = truncate_string(row['week'], 50)
+                printer_model = truncate_string(row.get('printer_model', None), 255)
+                division = truncate_string(row.get('division', None), 255)
+                location = truncate_string(row.get('location', None), 255)
+
+                original_row_num = row.name + 2
+
+                key = (user_name, document_name, hostname, date_val)
+                if key in existing_keys:
+                    duplicates.append({
+                        'user_name': user_name,
+                        'document_name': document_name,
+                        'hostname': hostname,
+                        'pages_printed': pages_printed,
+                        'date': date_val,
+                        'month': month,
+                        'week': week,
+                        'printer_model': printer_model,
+                        'division': division,
+                        'location': location
+                    })
+                    logging.info(f"Row {i} (Excel row {original_row_num}): Duplicate found, skipping insert.")
+                    continue
+
                 try:
-                    execute_with_retry(lambda: cursor.execute(insert_sql, params))
+                    execute_with_retry(lambda: cursor.execute(insert_sql, (
+                        document_name, user_name, hostname,
+                        pages_printed, date_val,
+                        month, week, printer_model, division, location
+                    )))
                     conn.commit()
                     inserted_count += 1
+                    last_inserted_idx = i
                 except Exception as ex:
                     if 'unique_all_columns' in str(ex):
                         logging.info(f"Row-by-row insert: Duplicate detected, skipping.")
+                    elif '22001' in str(ex) or 'String or binary data would be truncated' in str(ex):
+                        logging.warning(f"Row-by-row insert: Data too long, skipping row {i}. Data: {(document_name, user_name, hostname, pages_printed, date_val, month, week, printer_model, division, location)}")
                     else:
                         logging.error(f"Row-by-row insert error: {ex}")
                         raise ex
+            break
 
     cursor.close()
     conn.close()
@@ -250,18 +291,35 @@ def upload():
 
         try:
             import logging
-            # Read Excel file into DataFrame
+            # Read Excel file into DataFrame with flexible header row detection
             in_memory_file = BytesIO(file.read())
-            df = pd.read_excel(in_memory_file)
 
-            # Limit rows to 5000 to avoid connection issues
-            max_rows = 5000
-            if len(df) > max_rows:
-                flash(f"Upload file exceeds maximum allowed rows of {max_rows}. Please split your file and upload in parts.")
+            import logging
+
+            expected_cols = {'document name', 'user name', 'hostname', 'pages printed', 'date'}
+
+            # Try reading with multiple header rows to find expected columns
+            for header_row in [0, 1, 2]:
+                in_memory_file.seek(0)
+                df = pd.read_excel(in_memory_file, header=header_row)
+                logging.info(f"Columns read from Excel (header={header_row}): {df.columns.tolist()}")
+                df.columns = [col.strip().lower() for col in df.columns]
+                if expected_cols.issubset(set(df.columns)):
+                    break
+            else:
+                flash(f"Excel file must contain columns: {expected_cols}")
                 return redirect(url_for('upload'))
+
+            # Removed limit rows to 5000 to avoid connection issues
+            # max_rows = 5000
+            # if len(df) > max_rows:
+            #     flash(f"Upload file exceeds maximum allowed rows of {max_rows}. Please split your file and upload in parts.")
+            #     return redirect(url_for('upload'))
 
             # Normalize column names (strip and lowercase)
             df.columns = [col.strip().lower() for col in df.columns]
+            import logging
+            logging.info(f"Normalized columns: {df.columns.tolist()}")
             # Expected columns for printer logs
             expected_cols = {
                 'document name', 'user name', 'hostname', 'pages printed', 'date'
@@ -273,6 +331,21 @@ def upload():
 
             # Preprocess date column: strip whitespace and convert to string
             df['date'] = df['date'].astype(str).str.strip()
+
+            # Clean string columns to remove/normalize special or hidden characters
+            import re
+            def clean_string(s):
+                if pd.isna(s):
+                    return None
+                # Remove non-printable characters
+                s = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', str(s))
+                # Normalize whitespace
+                s = re.sub(r'\s+', ' ', s).strip()
+                return s
+
+            for col in ['user name', 'document name', 'hostname', 'month', 'week', 'printer_model', 'division', 'location']:
+                if col in df.columns:
+                    df[col] = df[col].apply(clean_string)
 
             # Define a list of date formats to try
             date_formats = [
@@ -325,7 +398,14 @@ def upload():
             df = df.dropna(subset=['pages printed'])
 
             # Derive 'month' column formatted as abbreviated month name + apostrophe + last two digits of year (e.g., May'25)
-            df['month'] = df['date'].dt.strftime("%b'%y")
+            try:
+                if 'month' not in df.columns or df['month'].isnull().all():
+                    df['month'] = df['date'].dt.strftime("%b'%y")
+            except Exception as e:
+                import logging
+                logging.error(f"Error deriving 'month' column: {e}")
+                flash(f"Error deriving 'month' column: {e}")
+                return redirect(url_for('upload'))
 
             # Derive 'week_1' column formatted as "Week " + week number in the month (e.g., Week 2)
             def week_of_month(dt):
@@ -334,8 +414,8 @@ def upload():
                 adjusted_dom = dom + first_day.weekday()
                 return int((adjusted_dom - 1) / 7) + 1
 
-            df['week_1'] = df['date'].apply(week_of_month)
-            df['week_1'] = df['week_1'].apply(lambda x: f"Week {x}")
+            df['week'] = df['date'].apply(week_of_month)
+            df['week'] = df['week'].apply(lambda x: f"Week {x}")
 
             # Query printer_data table from database to get printer model, division, location by matching hostname
             engine = get_sqlalchemy_engine()
@@ -368,7 +448,7 @@ def upload():
 
             # Rename 'week 1' column to 'week_1' to match database schema
             if 'week 1' in df.columns:
-                df.rename(columns={'week 1': 'week_1'}, inplace=True)
+                df.rename(columns={'week 1': 'week'}, inplace=True)
 
             # Replace NaN in printer_model, division, location with None for DB insertion
             df['printer_model'] = df['printer_model'].where(pd.notnull(df['printer_model']), None)
@@ -377,20 +457,23 @@ def upload():
 
             # Log derived month and week_1 columns before insertion
             logging.info(f"Derived 'month' column sample data:\\n{df['month'].head()}")
-            logging.info(f"Derived 'week_1' column sample data:\\n{df['week_1'].head()}")
+            logging.info(f"Derived 'week' column sample data:\\n{df['week'].head()}")
 
-            # Insert data into database
+            # Insert data into database in chunks of 5000 rows
             try:
-                duplicates = insert_data_to_db(df)
+                duplicates = []
+                chunk_size = 5000
+                for start in range(0, len(df), chunk_size):
+                    chunk = df.iloc[start:start+chunk_size]
+                    chunk_duplicates = insert_data_to_db(chunk)
+                    duplicates.extend(chunk_duplicates)
             except Exception as e:
                 flash(f"Error inserting data into database: {e}")
                 logging.error(f"Error inserting data into database: {e}")
                 return redirect(url_for('upload'))
 
             if duplicates and len(duplicates) > 0:
-                duplicate_msgs = [f"Duplicate entry skipped: Document '{d['document_name']}', User '{d['user_name']}', Host '{d['hostname']}', Date '{d['date']}'" for d in duplicates]
-                for msg in duplicate_msgs:
-                    flash(msg)
+                flash(f"{len(duplicates)} duplicate entries skipped.")
 
             flash('File uploaded and data saved to database successfully!')
             return redirect(url_for('view'))
@@ -419,7 +502,7 @@ def view():
     # Define valid filterable columns
     columns = [
         "document_name", "user_name", "hostname", "pages_printed", "date",
-        "month", "week_1", "printer_model", "division", "location"
+        "month", "week", "printer_model", "division", "location"
     ]
 
     filters = []
@@ -448,7 +531,7 @@ def view():
 
             query = f"""
                 SELECT document_name, user_name, hostname, pages_printed, date, month,
-                       week_1, printer_model, division, location
+                       week, printer_model, division, location
                 FROM printer_logs
                 {where_clause}
                 ORDER BY date DESC
@@ -481,7 +564,7 @@ def download_excel():
     # Same columns and filter logic
     columns = [
         "document_name", "user_name", "hostname", "pages_printed", "date",
-        "month", "week_1", "printer_model", "division", "location"
+        "month", "week", "printer_model", "division", "location"
     ]
 
     filters = []
@@ -499,7 +582,7 @@ def download_excel():
         engine = get_sqlalchemy_engine()
         query = f"""
             SELECT document_name, user_name, hostname, pages_printed, date, month,
-                   week_1, printer_model, division, location
+                   week, printer_model, division, location
             FROM printer_logs
             {where_clause}
             ORDER BY date DESC
@@ -551,7 +634,7 @@ def dashboard():
     try:
         import traceback
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week_1 FROM printer_logs"
+        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week FROM printer_logs"
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
@@ -578,7 +661,7 @@ def dashboard():
             if not pd.isna(filter_date):
                 month_str = filter_date.strftime("%b'%y")
                 week_str = f"Week {week_select}"
-                df = df[(df['month'] == month_str) & (df['week_1'] == week_str)]
+                df = df[(df['month'] == month_str) & (df['week'] == week_str)]
         elif time_filter == 'monthly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
             logging.info(f"Filtering monthly for year={filter_date.year}, month={filter_date.month}")
