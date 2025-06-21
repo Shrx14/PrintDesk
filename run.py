@@ -484,6 +484,9 @@ from flask import request, render_template, flash
 from sqlalchemy import text
 import pandas as pd
 
+from flask import send_file
+import io
+
 @app.route('/view')
 def view():
     page = request.args.get('page', default=1, type=int)
@@ -499,7 +502,6 @@ def view():
     filters = []
     params = {}
 
-    # Collect filters from URL query string
     for col in columns:
         val = request.args.get(col)
         if val:
@@ -511,19 +513,16 @@ def view():
     try:
         engine = get_sqlalchemy_engine()
 
-        # Get unique values for dropdowns
         unique_values = {}
         with engine.connect() as conn:
             for col in columns:
                 result = conn.execute(text(f"SELECT DISTINCT {col} FROM printer_logs ORDER BY {col}"))
                 unique_values[col] = [str(row[0]) for row in result if row[0] is not None]
 
-            # Count total rows after filtering
             count_query = f"SELECT COUNT(*) FROM printer_logs {where_clause}"
             total_rows = conn.execute(text(count_query), params).scalar()
             total_pages = (total_rows + per_page - 1) // per_page
 
-            # Get paginated filtered data
             query = f"""
                 SELECT document_name, user_name, hostname, pages_printed, date, month,
                        week_1, printer_model, division, location
@@ -532,12 +531,10 @@ def view():
                 ORDER BY date DESC
                 OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
             """
-
             df = pd.read_sql_query(text(query), conn, params=params)
 
         engine.dispose()
 
-        # Format date column if present
         if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
 
@@ -555,6 +552,57 @@ def view():
         unique_values=unique_values,
         filters_applied=bool(params)
     )
+
+@app.route('/download')
+def download_excel():
+    # Same columns and filter logic
+    columns = [
+        "document_name", "user_name", "hostname", "pages_printed", "date",
+        "month", "week_1", "printer_model", "division", "location"
+    ]
+
+    filters = []
+    params = {}
+
+    for col in columns:
+        val = request.args.get(col)
+        if val:
+            filters.append(f"{col} = :{col}")
+            params[col] = val
+
+    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+
+    try:
+        engine = get_sqlalchemy_engine()
+        query = f"""
+            SELECT document_name, user_name, hostname, pages_printed, date, month,
+                   week_1, printer_model, division, location
+            FROM printer_logs
+            {where_clause}
+            ORDER BY date DESC
+        """
+        df = pd.read_sql_query(text(query), engine, params=params)
+        engine.dispose()
+
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Write to Excel in memory
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='FilteredData', index=False)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name='printer_logs_filtered.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except Exception as e:
+        flash(f"Error generating Excel: {e}")
+        return redirect(url_for('view'))
 
 
 @app.route('/dashboard')
