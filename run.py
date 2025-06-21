@@ -610,7 +610,8 @@ def download_excel():
         flash(f"Error generating Excel: {e}")
         return redirect(url_for('view'))
 
-
+from flask import request, render_template
+import pandas as pd
 @app.route('/dashboard')
 def dashboard():
     import datetime
@@ -694,6 +695,12 @@ def dashboard():
         # Pass the filtered data to template
         data = df
 
+        # Add flash message if no data found for filters
+        if data.empty:
+            from flask import flash
+            # Remove flash message to avoid duplicate display
+            # flash("No data found for the selected filters.")
+
     except Exception as e:
         logging.error(f"Error in dashboard route: {e}")
         logging.error(traceback.format_exc())
@@ -710,12 +717,91 @@ def dashboard():
                            locations=locations,
                            data=data,
                            time_filter=time_filter,
-                           location_filter=location_filter,
+                           location_filter=location_filter,  
                            date_input=date_input,
                            month_input=month_input,
                            year_input=year_input,
                            week_select=week_select)
 
+
+from flask import send_file
+import io
+
+@app.route('/dashboard/export')
+def dashboard_export():
+    import datetime
+    time_filter = request.args.get('time_filter', 'all')
+    location_filter = request.args.get('location_filter', 'all')
+    date_input = request.args.get('date_input', None)
+    month_input = request.args.get('month_input', None)
+    year_input = request.args.get('year_input', None)
+    week_select = request.args.get('week_select', None)
+
+    try:
+        engine = get_sqlalchemy_engine()
+        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week_1 FROM printer_logs"
+        df = pd.read_sql_query(query, engine)
+        engine.dispose()
+
+        # Convert 'date' column to datetime
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+        # Filter by location if applicable
+        if location_filter != 'all':
+            df = df[df['location'] == location_filter]
+
+        # Filter by time
+        if time_filter == 'daily' and date_input:
+            filter_date = pd.to_datetime(date_input, errors='coerce')
+            if not pd.isna(filter_date):
+                df = df[df['date'].dt.date == filter_date.date()]
+        elif time_filter == 'weekly' and month_input and week_select:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            if not pd.isna(filter_date):
+                month_str = filter_date.strftime("%b'%y")
+                week_str = f"Week {week_select}"
+                df = df[(df['month'] == month_str) & (df['week_1'] == week_str)]
+        elif time_filter == 'monthly' and month_input:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            if not pd.isna(filter_date):
+                month_str = filter_date.strftime("%b'%y")
+                df = df[df['month'] == month_str]
+        elif time_filter == 'yearly' and year_input:
+            filter_year = None
+            try:
+                filter_year = int(year_input)
+            except:
+                filter_year = None
+            if filter_year:
+                df = df[df['date'].dt.year == filter_year]
+
+        # Compute top users by pages printed
+        top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).reset_index()
+
+        # Compute top printers by pages printed
+        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10).reset_index()
+
+        # Compute least used printers by pages printed
+        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10).reset_index()
+
+        # Write to Excel in memory with multiple sheets
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            top_users.to_excel(writer, sheet_name='Top Users', index=False)
+            top_printers.to_excel(writer, sheet_name='Top Printers', index=False)
+            least_printers.to_excel(writer, sheet_name='Least Used Printers', index=False)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name='dashboard_summary.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except Exception as e:
+        flash(f"Error generating Excel: {e}")
+        return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
     app.run(debug=True)
