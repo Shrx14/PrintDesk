@@ -410,13 +410,16 @@ import pandas as pd
 from flask import send_file
 import io
 
+from flask import render_template, request, flash
+import pyodbc
+import pandas as pd
+
 @app.route('/view')
 def view():
     page = request.args.get('page', default=1, type=int)
     per_page = 100
     offset = (page - 1) * per_page
 
-    # Define valid filterable columns
     columns = [
         "document_name", "user_name", "hostname", "pages_printed", "date",
         "month", "week_1", "printer_model", "division", "location"
@@ -425,41 +428,63 @@ def view():
     filters = []
     params = {}
 
+    # Global Search
+    global_search = request.args.get('q', '').strip()
+    if global_search:
+        global_conditions = []
+        for i, col in enumerate(columns):
+            key = f":global{i}"
+            global_conditions.append(f"LOWER(CAST({col} AS NVARCHAR)) LIKE {key}")
+            params[f"global{i}"] = f"%{global_search.lower()}%"
+        filters.append("(" + " OR ".join(global_conditions) + ")")
+
+    # Individual column filters
     for col in columns:
         val = request.args.get(col)
         if val:
-            filters.append(f"{col} = :{col}")
-            params[col] = val
+            if col == "date":
+                filters.append("CAST(date AS DATE) = CAST(? AS DATE)")
+                params["date"] = val
+            else:
+                filters.append(f"{col} = ?")
+                params[col] = val
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
     try:
-        engine = get_sqlalchemy_engine()
+        conn = pyodbc.connect("DRIVER={ODBC Driver 18 for SQL Server};SERVER=...;DATABASE=...;UID=...;PWD=...")
+        cursor = conn.cursor()
 
+        # Get unique values for filters
         unique_values = {}
-        with engine.connect() as conn:
-            for col in columns:
-                result = conn.execute(text(f"SELECT DISTINCT {col} FROM printer_logs ORDER BY {col}"))
-                unique_values[col] = [str(row[0]) for row in result if row[0] is not None]
+        for col in columns:
+            cursor.execute(f"SELECT DISTINCT {col} FROM printer_logs ORDER BY {col}")
+            unique_values[col] = [str(row[0]) for row in cursor.fetchall() if row[0] is not None]
 
-            count_query = f"SELECT COUNT(*) FROM printer_logs {where_clause}"
-            total_rows = conn.execute(text(count_query), params).scalar()
-            total_pages = (total_rows + per_page - 1) // per_page
+        # Count total
+        count_sql = f"SELECT COUNT(*) FROM printer_logs {where_clause}"
+        cursor.execute(count_sql, *params.values())
+        total_rows = cursor.fetchone()[0]
+        total_pages = (total_rows + per_page - 1) // per_page
 
-            query = f"""
-                SELECT document_name, user_name, hostname, pages_printed, date, month,
-                       week_1, printer_model, division, location
-                FROM printer_logs
-                {where_clause}
-                ORDER BY date DESC
-                OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
-            """
-            df = pd.read_sql_query(text(query), conn, params=params)
+        # Fetch page data
+        query = f"""
+            SELECT document_name, user_name, hostname, pages_printed, date, month,
+                   week_1, printer_model, division, location
+            FROM printer_logs
+            {where_clause}
+            ORDER BY date DESC
+            OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
+        """
+        cursor.execute(query, *params.values())
+        rows = cursor.fetchall()
+        df = pd.DataFrame.from_records(rows, columns=[col[0] for col in cursor.description])
+        cursor.close()
+        conn.close()
 
-        engine.dispose()
-
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.strftime('%Y-%m-%d %H:%M:%S')
+        # Format datetime in Pandas
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d %H:%M:%S")
 
     except Exception as e:
         flash(f"Error retrieving data: {e}")
@@ -468,13 +493,15 @@ def view():
         total_pages = 0
 
     return render_template(
-        'view.html',
+        "view.html",
         data=df,
         page=page,
         total_pages=total_pages,
         unique_values=unique_values,
         filters_applied=bool(params)
     )
+
+
 
 @app.route('/download')
 def download_excel():

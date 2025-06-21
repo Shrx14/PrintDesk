@@ -10,6 +10,15 @@
   </div>
 </div>
 
+<!-- Global Search Bar -->
+<form method="get" action="{{ url_for('view') }}" class="mb-3">
+  <div class="input-group">
+    <input type="text" name="q" value="{{ request.args.get('q', '') }}"
+           class="form-control" placeholder="🔍 Search across all columns...">
+    <button type="submit" class="btn btn-primary">Search</button>
+  </div>
+</form>
+
 {% if data is not none %}
 <form id="filter-form" method="get" action="{{ url_for('view') }}">
   <div id="table-container" class="table-responsive" style="max-height: 70vh; overflow: auto;">
@@ -35,27 +44,28 @@
           {% for col in data.columns %}
           <th>
             {% if 'document' in col|lower and 'name' in col|lower %}
-              <!-- Autocomplete for document name -->
               <input list="doc-name-options-{{ loop.index }}" type="search" name="{{ col }}"
                 class="form-control form-control-sm"
                 placeholder="Search Document Name"
-                value="{{ request.args.get(col, '') }}"
-                oninput="this.setAttribute('value', this.value)">
+                value="{{ request.args.get(col, '') }}">
               <datalist id="doc-name-options-{{ loop.index }}">
                 {% for val in unique_values[col] %}
                 <option value="{{ val }}">
                 {% endfor %}
               </datalist>
 
+            {% elif col == 'date' %}
+              <input type="date" name="date" class="form-control form-control-sm"
+                value="{{ request.args.get('date', '') }}"
+                onchange="document.getElementById('filter-form').submit();">
+
             {% elif 'page' in col|lower %}
-              <!-- Numeric input for pages -->
               <input type="number" name="{{ col }}" class="form-control form-control-sm"
                 placeholder="e.g. 5"
                 value="{{ request.args.get(col, '') }}"
                 onkeypress="if(event.key === 'Enter') document.getElementById('filter-form').submit();">
 
             {% else %}
-              <!-- Default dropdown -->
               <select name="{{ col }}" onchange="document.getElementById('filter-form').submit()" class="form-select form-select-sm">
                 <option value="">All</option>
                 {% for val in unique_values[col] %}
@@ -134,7 +144,19 @@
   </ul>
 </nav>
 
-<!-- Table Styling -->
+{% else %}
+<div class="alert alert-warning text-center">
+  No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
+</div>
+{% endif %}
+
+<!-- Navigation Buttons -->
+<div class="mt-5 text-center">
+  <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">📊 Dashboard</a>
+</div>
+
+<!-- Styles and Scripts -->
 <style>
   #data-table td, #data-table th {
     padding: 4px 8px !important;
@@ -163,7 +185,6 @@
   }
 </style>
 
-<!-- Fullscreen Script -->
 <script>
   const fullscreenBtn = document.getElementById('fullscreen-btn');
   const tableContainer = document.getElementById('table-container');
@@ -188,16 +209,4 @@
     }
   });
 </script>
-
-{% else %}
-<div class="alert alert-warning text-center">
-  No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
-</div>
-{% endif %}
-
-<!-- Navigation -->
-<div class="mt-5 text-center">
-  <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">📊 Dashboard</a>
-</div>
 {% endblock %}
