@@ -18,7 +18,7 @@
       yearInputWrapper.classList.add('d-none');
     } else if (timeFilter === 'weekly') {
       dateInputWrapper.classList.add('d-none');
-      monthInputWrapper.classList.add('d-none');
+      monthInputWrapper.classList.remove('d-none');  // Show month input for weekly filter
       weekSelectWrapper.classList.remove('d-none');
       yearInputWrapper.classList.add('d-none');
     } else if (timeFilter === 'monthly') {
