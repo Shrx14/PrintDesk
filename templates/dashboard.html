@@ -77,6 +77,11 @@
         <option value="yearly" {% if time_filter == 'yearly' %}selected{% endif %}>Yearly</option>
       </select>
     </div>
+    <div class="col-md-3 d-flex align-items-center">
+      <a href="{{ url_for('dashboard_export', time_filter=time_filter, location_filter=location_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success ms-3">
+        ⬇️ Export to Excel
+      </a>
+    </div>
 
   <div class="col-md-3">
     <label for="location_filter" class="form-label">Filter by Location</label>
