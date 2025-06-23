@@ -798,7 +798,7 @@ def dashboard_export():
 
     try:
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week_1 FROM printer_logs"
+        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week FROM printer_logs"
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
@@ -819,7 +819,7 @@ def dashboard_export():
             if not pd.isna(filter_date):
                 month_str = filter_date.strftime("%b'%y")
                 week_str = f"Week {week_select}"
-                df = df[(df['month'] == month_str) & (df['week_1'] == week_str)]
+                df = df[(df['month'] == month_str) & (df['week'] == week_str)]
         elif time_filter == 'monthly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
             if not pd.isna(filter_date):
