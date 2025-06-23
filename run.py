@@ -674,100 +674,86 @@ def download_excel():
 @app.route('/dashboard')
 def dashboard():
     import datetime
-    time_filter = request.args.get('time_filter', 'all')
-    location_filter = request.args.get('location_filter', 'all')
-    date_input = request.args.get('date_input', None)
-    month_input = request.args.get('month_input', None)
-    year_input = request.args.get('year_input', None)
-    week_select = request.args.get('week_select', None)
+    import traceback
+    import logging
+    from flask import flash, request, render_template
 
-    # Set default date_input, month_input or year_input based on time_filter if not provided
-    if not date_input and not month_input and not year_input:
+    # Parse filters from query parameters
+    time_filter = request.args.get('time_filter')
+    location_filter = request.args.get('location_filter')
+    division_filter = request.args.get('division_filter')
+    date_input = request.args.get('date_input')
+    month_input = request.args.get('month_input')
+    year_input = request.args.get('year_input')
+    week_select = request.args.get('week_select')
+
+    # If no filters provided (i.e., first visit), set default: last month + PT + monthly
+    if not request.args:
         now = datetime.datetime.now()
-        if time_filter == 'daily':
-            date_input = now.strftime('%Y-%m-%d')
-        elif time_filter == 'monthly':
-            month_input = now.strftime('%Y-%m')
-        elif time_filter == 'yearly':
-            year_input = str(now.year)
+        last_month_date = now.replace(day=1) - datetime.timedelta(days=1)
+        month_input = last_month_date.strftime('%Y-%m')
+        time_filter = 'monthly'
+        division_filter = 'PT'
 
     try:
-        import traceback
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week FROM printer_logs"
+        query = "SELECT user_name, printer_model, location, division, pages_printed, date, month, week FROM printer_logs"
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
-        # Convert 'date' column to datetime
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
-        import logging
-        logging.info(f"Dashboard filter: time_filter={time_filter}, month_input={month_input}, week_select={week_select}")
-        logging.info(f"Date column unique years: {df['date'].dt.year.dropna().unique()}")
-        logging.info(f"Date column unique months: {df['date'].dt.month.dropna().unique()}")
+        logging.info(f"Filters => time: {time_filter}, date: {date_input}, month: {month_input}, year: {year_input}, week: {week_select}, location: {location_filter}, division: {division_filter}")
 
-        # Filter by location if applicable
-        if location_filter != 'all':
+        # Apply location filter
+        if location_filter and location_filter != 'all':
             df = df[df['location'] == location_filter]
 
-        # Filter by time
+        # Apply division filter
+        if division_filter and division_filter != 'all':
+            df = df[df['division'] == division_filter]
+
+        # Apply time filters
         if time_filter == 'daily' and date_input:
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
                 df = df[df['date'].dt.date == filter_date.date()]
         elif time_filter == 'weekly' and month_input and week_select:
             filter_date = pd.to_datetime(month_input, errors='coerce')
-            logging.info(f"Filtering weekly for month={month_input}, week={week_select}")
             if not pd.isna(filter_date):
                 month_str = filter_date.strftime("%b'%y")
                 week_str = f"Week {week_select}"
                 df = df[(df['month'] == month_str) & (df['week'] == week_str)]
         elif time_filter == 'monthly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
-            logging.info(f"Filtering monthly for year={filter_date.year}, month={filter_date.month}")
             if not pd.isna(filter_date):
-                # Convert filter_date to format like "May'25"
                 month_str = filter_date.strftime("%b'%y")
                 df = df[df['month'] == month_str]
         elif time_filter == 'yearly' and year_input:
-            filter_year = None
             try:
-                filter_year = int(year_input)
-            except:
-                filter_year = None
-            if filter_year:
-                df = df[df['date'].dt.year == filter_year]
-        # else 'all' no filter
+                year_int = int(year_input)
+                df = df[df['date'].dt.year == year_int]
+            except ValueError:
+                pass
 
-        # Compute top users by pages printed
         top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
-
-        # Compute top printers by pages printed
         top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
+        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values().head(10).to_dict()
 
-        # Compute least used printers by pages printed
-        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10).to_dict()
-
-        # Get unique locations for filter dropdown
         locations = sorted(df['location'].dropna().unique())
-
-        # Pass the filtered data to template
         data = df
 
-        # Add flash message if no data found for filters
         if data.empty:
-            from flask import flash
-            # Remove flash message to avoid duplicate display
-            # flash("No data found for the selected filters.")
+            flash("No data found for the selected filters.")
 
-    except Exception as e:
-        logging.error(f"Error in dashboard route: {e}")
+    except Exception:
+        logging.error("Error in dashboard route:")
         logging.error(traceback.format_exc())
         top_users = {}
         top_printers = {}
         least_printers = {}
         locations = []
-        data = pd.DataFrame()  # Return empty dataframe instead of None to avoid "No data uploaded" message
+        data = pd.DataFrame()
 
     return render_template('dashboard.html',
                            top_users=top_users,
@@ -776,11 +762,13 @@ def dashboard():
                            locations=locations,
                            data=data,
                            time_filter=time_filter,
-                           location_filter=location_filter,  
+                           location_filter=location_filter or 'all',
+                           division_filter=division_filter or 'PT',
                            date_input=date_input,
                            month_input=month_input,
                            year_input=year_input,
                            week_select=week_select)
+
 
 
 from flask import send_file
