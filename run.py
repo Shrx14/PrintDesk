@@ -23,7 +23,6 @@ def get_db_connection():
     return pyodbc.connect(conn_str)
 
 from sqlalchemy.pool import QueuePool
-from sqlalchemy import text
 
 def get_sqlalchemy_engine():
     params = urllib.parse.quote_plus(
@@ -51,8 +50,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
-
-import logging
 
 def create_table_if_not_exists():
     create_table_sql = """
@@ -535,11 +532,6 @@ def upload():
 
     return render_template('upload.html')
 
-from flask import request
-
-from flask import request, render_template, flash
-from sqlalchemy import text
-import pandas as pd
 
 from flask import send_file
 import io
@@ -559,11 +551,26 @@ def view():
     filters = []
     params = {}
 
+    # Handle global search across all columns
+    search_term = request.args.get("search", "").strip()
+    if search_term:
+        search_clauses = [f"{col} LIKE :search" for col in columns]
+        filters.append("(" + " OR ".join(search_clauses) + ")")
+        params["search"] = f"%{search_term}%"
+
+    # Handle column-specific filters
     for col in columns:
         val = request.args.get(col)
         if val:
-            filters.append(f"{col} = :{col}")
-            params[col] = val
+            if col == 'date':
+                # Partial match with LIKE for dates to catch substrings like '2025-06-18'
+                filters.append(f"{col} LIKE :{col}")
+                params[col] = f"%{val}%"
+            else:
+                # Exact match for other columns
+                filters.append(f"{col} = :{col}")
+                params[col] = val
+
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
@@ -572,14 +579,17 @@ def view():
 
         unique_values = {}
         with engine.connect() as conn:
+            # Get unique values for filter dropdowns
             for col in columns:
                 result = conn.execute(text(f"SELECT DISTINCT {col} FROM printer_logs ORDER BY {col}"))
                 unique_values[col] = [str(row[0]) for row in result if row[0] is not None]
 
+            # Get total row count for pagination
             count_query = f"SELECT COUNT(*) FROM printer_logs {where_clause}"
             total_rows = conn.execute(text(count_query), params).scalar()
             total_pages = (total_rows + per_page - 1) // per_page
 
+            # Fetch paginated data
             query = f"""
                 SELECT document_name, user_name, hostname, pages_printed, date, month,
                        week, printer_model, division, location
@@ -661,8 +671,6 @@ def download_excel():
         flash(f"Error generating Excel: {e}")
         return redirect(url_for('view'))
 
-from flask import request, render_template
-import pandas as pd
 @app.route('/dashboard')
 def dashboard():
     import datetime

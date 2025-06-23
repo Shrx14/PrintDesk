@@ -12,6 +12,17 @@
 
 {% if data is not none %}
 <form id="filter-form" method="get" action="{{ url_for('view') }}">
+  <div class="mb-3" style="max-width: 400px;">
+    <input
+      type="search"
+      name="search"
+      class="form-control"
+      placeholder="🔍 Search all columns..."
+      value="{{ request.args.get('search', '') }}"
+      onkeypress="if(event.key === 'Enter') document.getElementById('filter-form').submit();"
+    >
+  </div>
+
   <div id="table-container" class="table-responsive" style="max-height: 70vh; overflow: auto;">
     <div class="d-flex justify-content-end mb-2">
       {% set query_string = request.query_string.decode('utf-8') %}
