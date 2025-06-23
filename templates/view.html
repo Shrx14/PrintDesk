@@ -26,9 +26,59 @@
   <div id="table-container" class="table-responsive" style="max-height: 70vh; overflow: auto;">
     <div class="d-flex justify-content-end mb-2">
       {% set query_string = request.query_string.decode('utf-8') %}
-      <a href="{{ url_for('download_excel') }}{% if query_string %}?{{ query_string }}{% endif %}" class="btn btn-success">
+      <button id="download-excel-btn" class="btn btn-success" type="button" style="position: relative; display: flex; align-items: center; gap: 8px;">
         ⬇️ Download as Excel
-      </a>
+        <div id="loading-spinner" style="display:none; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite;">
+        </div>
+      </button>
+
+      <style>
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      </style>
+
+      <iframe id="download-iframe" style="display:none;"></iframe>
+
+      <script>
+        document.getElementById('download-excel-btn').addEventListener('click', function() {
+          var spinner = document.getElementById('loading-spinner');
+          var iframe = document.getElementById('download-iframe');
+          var button = this;
+          spinner.style.display = 'inline-block';
+          button.disabled = true;
+
+          // Build download URL with query string if present
+          var downloadUrl = "{{ url_for('download_excel') }}";
+          var queryString = "{{ query_string }}";
+          if (queryString) {
+            downloadUrl += '?' + queryString;
+          }
+
+          // Set iframe src to trigger download
+          iframe.src = downloadUrl;
+
+          // Hide spinner and enable button when iframe loads (download complete)
+          iframe.onload = function() {
+            spinner.style.display = 'none';
+            button.disabled = false;
+          };
+
+          // Fallback: hide spinner and enable button after 15 seconds in case iframe.onload doesn't fire
+          var fallbackTimeout = setTimeout(function() {
+            spinner.style.display = 'none';
+            button.disabled = false;
+          }, 15000);
+
+          // Clear fallback if iframe loads before timeout
+          iframe.onload = function() {
+            clearTimeout(fallbackTimeout);
+            spinner.style.display = 'none';
+            button.disabled = false;
+          };
+        });
+      </script>
     </div>
 
     <table id="data-table" class="table table-bordered table-striped table-hover align-middle w-auto">
