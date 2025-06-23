@@ -3,9 +3,27 @@
 {% block title %}Home | Printer Desk{% endblock %}
 
 {% block content %}
+  <style>
+    .hero {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .hero img {
+      max-width: 100%;
+      height: auto;
+      margin-top: 20px;
+    }
+  </style>
+
   <section class="hero">
     <h2>Welcome to Printer Desk</h2>
     <p>Easily upload, manage, and analyze your printer logs.</p>
     <img src="/static/images/printer.jpg" alt="Printer Dashboard">
   </section>
 {% endblock %}
+

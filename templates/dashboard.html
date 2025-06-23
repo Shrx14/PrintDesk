@@ -22,7 +22,6 @@
 
 <h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
 
-{# ✅ Alert and switch button for default view (monthly + PT or PY + no query string) #}
 {% if time_filter == 'monthly' and division_filter in ['PT', 'PY'] and not request.query_string %}
   <div class="alert alert-info text-center">
     Showing default data for <strong>last month</strong> and <strong>{{ division_filter }}</strong> division.
@@ -57,7 +56,8 @@
       No data found for the selected filters.
     </div>
   {% endif %}
-  
+
+  <!-- Filters -->
   <form id="filterForm" method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
     <div class="col-md-3">
       <label for="time_filter" class="form-label">Filter by Time</label>
@@ -128,55 +128,78 @@
     </div>
   </form>
 
-  <div class="row g-4">
-    <div class="col-md-4">
-      <div class="card border-primary shadow-sm">
-        <div class="card-header bg-primary text-white">Top 10 Users</div>
-        <ul class="list-group list-group-flush">
-          {% for user, pages in top_users.items() %} 
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-
-<script>
-  document.getElementById('filterForm').addEventListener('submit', function () {
-    const btn = document.getElementById('applyFiltersBtn');
-    const spinner = document.getElementById('loadingSpinner');
-    btn.disabled = true;
-    spinner.classList.remove('d-none');
-  });
-</script>
-
-    <div class="col-md-4">
-      <div class="card border-success shadow-sm">
-        <div class="card-header bg-success text-white">Top 10 Printers</div>
-        <ul class="list-group list-group-flush">
-          {% for printer, pages in top_printers.items() %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-
-    <div class="col-md-4">
-      <div class="card border-danger shadow-sm">
-        <div class="card-header bg-danger text-white">Least Used Printers</div>
-        <ul class="list-group list-group-flush">
-          {% for printer, pages in least_printers.items() %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
-            </li>
-          {% endfor %}
-        </ul>
+  <!-- Top 10 Printers -->
+  <div class="mb-4">
+    <div class="card border-success shadow-sm">
+      <div class="card-header bg-success text-white">Top 10 Printers</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Printer Model</th>
+              <th>Hostname</th>
+              <th>Location</th>
+              <th>Pages Printed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for printer, info in top_printers.items() %}
+              <tr>
+                <td>{{ printer }}</td>
+                <td>{{ info.hostname }}</td>
+                <td>{{ info.location }}</td>
+                <td class="fw-bold">{{ info.pages_printed }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
+
+  <!-- Least Used Printers -->
+  <div class="mb-4">
+    <div class="card border-danger shadow-sm">
+      <div class="card-header bg-danger text-white">Least Used Printers</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Printer Model</th>
+              <th>Hostname</th>
+              <th>Location</th>
+              <th>Pages Printed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for printer, info in least_printers.items() %}
+              <tr>
+                <td>{{ printer }}</td>
+                <td>{{ info.hostname }}</td>
+                <td>{{ info.location }}</td>
+                <td class="fw-bold">{{ info.pages_printed }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top 10 Users -->
+  <div class="col-md-4 mb-4">
+    <div class="card border-primary shadow-sm">
+      <div class="card-header bg-primary text-white">Top 10 Users</div>
+      <ul class="list-group list-group-flush">
+        {% for user, pages in top_users.items() %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
 {% endif %}
 
 <script>

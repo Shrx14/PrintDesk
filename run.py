@@ -697,7 +697,7 @@ def dashboard():
 
     try:
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, division, pages_printed, date, month, week FROM printer_logs"
+        query = "SELECT user_name, printer_model, hostname, location, division, pages_printed, date, month, week FROM printer_logs"
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
@@ -736,9 +736,31 @@ def dashboard():
             except ValueError:
                 pass
 
+        # Top users (same as before)
         top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
-        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
-        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values().head(10).to_dict()
+
+        # Helper to build printer info dict with hostname and location
+        def get_printer_info(printer_series):
+            info = {}
+            for printer_model, pages in printer_series.items():
+                subset = df[df['printer_model'] == printer_model]
+                hostname_mode = subset['hostname'].mode()
+                hostname = hostname_mode.iloc[0] if not hostname_mode.empty else ''
+                location_mode = subset['location'].mode()
+                location = location_mode.iloc[0] if not location_mode.empty else ''
+                info[printer_model] = {
+                    'pages_printed': pages,
+                    'hostname': hostname,
+                    'location': location
+                }
+            return info
+
+        # Get top printers and least printers with additional info
+        printer_pages_desc = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10)
+        printer_pages_asc = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
+
+        top_printers = get_printer_info(printer_pages_desc)
+        least_printers = get_printer_info(printer_pages_asc)
 
         locations = sorted(df['location'].dropna().unique())
         data = df
