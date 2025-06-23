@@ -799,17 +799,21 @@ import io
 @app.route('/dashboard/export')
 def dashboard_export():
     import datetime
+
+    # Get filter values
     time_filter = request.args.get('time_filter', 'all')
     location_filter = request.args.get('location_filter', 'all')
-    date_input = request.args.get('date_input', None)
-    month_input = request.args.get('month_input', None)
-    year_input = request.args.get('year_input', None)
-    week_select = request.args.get('week_select', None)
+    division_filter = request.args.get('division_filter', 'all')
+    date_input = request.args.get('date_input')
+    month_input = request.args.get('month_input')
+    year_input = request.args.get('year_input')
+    week_select = request.args.get('week_select')
 
     try:
+        # Load data
         engine = get_sqlalchemy_engine()
         query = """
-            SELECT user_name, printer_model, hostname, location, pages_printed, date, month, week
+            SELECT user_name, printer_model, hostname, location, division, pages_printed, date, month, week
             FROM printer_logs
         """
         df = pd.read_sql_query(query, engine)
@@ -817,11 +821,13 @@ def dashboard_export():
 
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
-        # Apply location filter
+        # Apply filters
         if location_filter != 'all':
             df = df[df['location'] == location_filter]
 
-        # Apply time filters
+        if division_filter != 'all':
+            df = df[df['division'] == division_filter]
+
         if time_filter == 'daily' and date_input:
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
@@ -844,7 +850,7 @@ def dashboard_export():
             except ValueError:
                 pass
 
-        # Group top and least printers by model + hostname + location
+        # Group printers
         printer_group = df.groupby(['printer_model', 'hostname', 'location'])['pages_printed'].sum().reset_index()
         top_printers = printer_group.sort_values(by='pages_printed', ascending=False).head(10)
         least_printers = printer_group.sort_values(by='pages_printed', ascending=True).head(10)
@@ -852,12 +858,34 @@ def dashboard_export():
         # Top users
         top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).reset_index()
 
+        # Prepare filter summary rows
+        filter_summary = [
+            ['Applied Filters'],
+            ['Time Filter', time_filter],
+            ['Location Filter', location_filter],
+            ['Division Filter', division_filter],
+            ['Date Input', date_input],
+            ['Month Input', month_input],
+            ['Week Select', week_select],
+            ['Year Input', year_input],
+            []
+        ]
+
         # Export to Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            top_users.to_excel(writer, sheet_name='Top Users', index=False)
-            top_printers.to_excel(writer, sheet_name='Top Printers', index=False)
-            least_printers.to_excel(writer, sheet_name='Least Used Printers', index=False)
+            for sheet_name, data in [
+                ('Top Users', top_users),
+                ('Top Printers', top_printers),
+                ('Least Used Printers', least_printers),
+            ]:
+                # Create filter header as a DataFrame
+                filter_df = pd.DataFrame(filter_summary)
+                filter_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False, startrow=0)
+
+                # Write data starting below the filters (at row 10)
+                data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=len(filter_summary))
+
         output.seek(0)
 
         return send_file(
@@ -869,7 +897,7 @@ def dashboard_export():
 
     except Exception as e:
         flash(f"Error generating Excel: {e}")
-        return redirect(url_for('dashboard'))  # Or 'usage' if your route is named differently
+        return redirect(url_for('dashboard'))  # Use correct route name for your app
 
 
 
