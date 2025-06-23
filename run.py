@@ -808,18 +808,20 @@ def dashboard_export():
 
     try:
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, location, pages_printed, date, month, week FROM printer_logs"
+        query = """
+            SELECT user_name, printer_model, hostname, location, pages_printed, date, month, week
+            FROM printer_logs
+        """
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
-        # Convert 'date' column to datetime
         df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
-        # Filter by location if applicable
+        # Apply location filter
         if location_filter != 'all':
             df = df[df['location'] == location_filter]
 
-        # Filter by time
+        # Apply time filters
         if time_filter == 'daily' and date_input:
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
@@ -836,24 +838,21 @@ def dashboard_export():
                 month_str = filter_date.strftime("%b'%y")
                 df = df[df['month'] == month_str]
         elif time_filter == 'yearly' and year_input:
-            filter_year = None
             try:
                 filter_year = int(year_input)
-            except:
-                filter_year = None
-            if filter_year:
                 df = df[df['date'].dt.year == filter_year]
+            except ValueError:
+                pass
 
-        # Compute top users by pages printed
+        # Group top and least printers by model + hostname + location
+        printer_group = df.groupby(['printer_model', 'hostname', 'location'])['pages_printed'].sum().reset_index()
+        top_printers = printer_group.sort_values(by='pages_printed', ascending=False).head(10)
+        least_printers = printer_group.sort_values(by='pages_printed', ascending=True).head(10)
+
+        # Top users
         top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).reset_index()
 
-        # Compute top printers by pages printed
-        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10).reset_index()
-
-        # Compute least used printers by pages printed
-        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10).reset_index()
-
-        # Write to Excel in memory with multiple sheets
+        # Export to Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             top_users.to_excel(writer, sheet_name='Top Users', index=False)
@@ -870,7 +869,9 @@ def dashboard_export():
 
     except Exception as e:
         flash(f"Error generating Excel: {e}")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('dashboard'))  # Or 'usage' if your route is named differently
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
