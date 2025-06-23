@@ -121,8 +121,9 @@
     </div>
 
     <div class="col-md-3">
-      <a href="{{ url_for('dashboard_export', time_filter=time_filter, location_filter=location_filter, division_filter=division_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success w-100">
+      <a id="exportExcelBtn" href="{{ url_for('dashboard_export', time_filter=time_filter, location_filter=location_filter, division_filter=division_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success w-100">
         ⬇️ Export to Excel
+        <span id="exportLoadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
       </a>
     </div>
   </form>
@@ -207,6 +208,17 @@
     const spinner = document.getElementById('loadingSpinner');
     btn.disabled = true;
     spinner.classList.remove('d-none');
+  });
+
+  document.getElementById('exportExcelBtn').addEventListener('click', function (event) {
+    const btn = event.currentTarget;
+    const spinner = document.getElementById('exportLoadingSpinner');
+    btn.classList.add('disabled');
+    spinner.classList.remove('d-none');
+    setTimeout(() => {
+      btn.classList.remove('disabled');
+      spinner.classList.add('d-none');
+    }, 5000); // Hide spinner and enable button after 5 seconds
   });
 </script>
 {% endblock %}
