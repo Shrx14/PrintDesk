@@ -3,6 +3,22 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
+<script>
+  function updateDateInputVisibility() {
+    const timeFilter = document.getElementById('time_filter').value;
+    const dateInputWrapper = document.getElementById('date_input_wrapper');
+    const monthInputWrapper = document.getElementById('month_input_wrapper');
+    const weekSelectWrapper = document.getElementById('week_select_wrapper');
+    const yearInputWrapper = document.getElementById('year_input_wrapper');
+
+    dateInputWrapper.classList.toggle('d-none', timeFilter !== 'daily');
+    monthInputWrapper.classList.toggle('d-none', !(timeFilter === 'monthly' || timeFilter === 'weekly'));
+    weekSelectWrapper.classList.toggle('d-none', timeFilter !== 'weekly');
+    yearInputWrapper.classList.toggle('d-none', timeFilter !== 'yearly');
+  }
+
+  window.addEventListener('DOMContentLoaded', updateDateInputVisibility);
+</script>
 
 <h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
 
@@ -230,6 +246,7 @@
 
     function showFlash(msg) {
       flashContainer.innerHTML = `
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
         <div class="alert alert-warning" role="alert">
           ${msg}
         </div>
