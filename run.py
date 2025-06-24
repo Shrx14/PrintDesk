@@ -1,7 +1,8 @@
-from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, url_for, flash , jsonify
 import pandas as pd
 from io import BytesIO
 import pyodbc
+import datetime
 from sqlalchemy import create_engine, text
 import urllib
 
@@ -328,6 +329,16 @@ def insert_data_to_db(df):
 @app.route('/')
 def home():
     return render_template("home.html")
+@app.route('/api/home/html')
+def api_home_html():
+    return render_template('home.html') 
+@app.route('/api/home', methods=['GET'])
+def api_home():
+    return jsonify({
+        "message": "Welcome to Printer Desk",
+        "status": "success",
+        "info": "Use this API to integrate with the Printer Desk platform."
+    })
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
@@ -420,7 +431,7 @@ def upload():
                 from datetime import datetime
                 for fmt in date_formats:
                     try:
-                        return datetime.strptime(text, fmt)
+                        return datetime.strptime(text, fmt)                                                                                                                                                                                                                                                                                     
                     except Exception:
                         continue
                 return pd.NaT
@@ -532,9 +543,31 @@ def upload():
 
     return render_template('upload.html')
 
+@app.route('/api/upload', methods=['GET', 'POST'])
+def api_upload_excel():
+    upload_type = request.form.get('upload_type')
+    file = request.files.get('file')
+
+    if not file:
+        return jsonify({'success': False, 'message': 'No file uploaded.'}), 400
+
+    try:
+        in_memory_file = BytesIO(file.read())
+        df = pd.read_excel(in_memory_file)
+
+        # Process as you did before
+        # Add validation, parsing, etc. as in your existing upload logic
+
+        return jsonify({'success': True, 'message': 'File uploaded and processed successfully.'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 
 from flask import send_file
 import io
+
 
 @app.route('/view')
 def view():
@@ -670,6 +703,7 @@ def download_excel():
     except Exception as e:
         flash(f"Error generating Excel: {e}")
         return redirect(url_for('view'))
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -902,4 +936,4 @@ def dashboard_export():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

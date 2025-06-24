@@ -23,8 +23,8 @@
     >
   </div>
 
-  <div id="table-container" class="table-responsive" style="max-height: 70vh; overflow: auto;">
-    <div class="d-flex justify-content-end mb-2">
+
+  <div class="d-flex justify-content-end mb-2">
       {% set query_string = request.query_string.decode('utf-8') %}
       <button id="download-excel-btn" class="btn btn-success" type="button" style="position: relative; display: flex; align-items: center; gap: 8px;">
         ⬇️ Download as Excel
@@ -80,7 +80,8 @@
         });
       </script>
     </div>
-
+    
+  <div id="table-container" class="table-responsive" style="max-height: 70vh; overflow: auto;">
     <table id="data-table" class="table table-bordered table-striped table-hover align-middle w-auto">
       <thead class="table-dark">
         <tr>
