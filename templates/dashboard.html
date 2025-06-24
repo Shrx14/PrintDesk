@@ -56,7 +56,7 @@
       No data found for the selected filters.
     </div>
   {% endif %}
-
+  <div id="flash-container"></div>
   <!-- Filters -->
   <form id="filterForm" method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
     <div class="col-md-3">
@@ -185,7 +185,7 @@
       </div>
     </div>
   </div>
-
+ 
   <!-- Top 10 Users -->
   <div class="col-md-4 mb-4">
     <div class="card border-primary shadow-sm">
@@ -221,4 +221,42 @@
     }, 5000); // Hide spinner and enable button after 5 seconds
   });
 </script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('filterForm');
+    const applyBtn = document.getElementById('applyFiltersBtn');
+    const timeSelect = document.getElementById('time_filter');
+    const dateInput = document.getElementById('date_input');
+    const flashContainer = document.getElementById('flash-container');
+
+    applyBtn.addEventListener('click', (e) => {
+      // Only block if Daily is selected and no date entered
+      if (timeSelect.value === 'daily' && !dateInput.value) {
+        e.preventDefault();  // prevent the form from submitting
+        showFlash('⚠️ Please select a date to apply the daily filter.');
+      }
+    });
+
+    dateInput.addEventListener('input', () => {
+      // Remove flash message once the user picks a date
+      if (dateInput.value.trim()) {
+        clearFlash();
+      }
+    });
+
+    function showFlash(msg) {
+      flashContainer.innerHTML = `
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+          ${msg}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      `;
+    }
+
+    function clearFlash() {
+      flashContainer.innerHTML = '';
+    }
+  });
+</script>
+
 {% endblock %}
