@@ -112,6 +112,34 @@ def create_printer_data_table_if_not_exists():
         from flask import flash
         flash(f"Error creating printer_data table: {e}")
 
+def create_printer_exceptions_table_if_not_exists():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sysobjects WHERE name='printer_exceptions' AND xtype='U'")
+        result = cursor.fetchone()
+        if not result:
+            create_table_sql = """
+            CREATE TABLE printer_exceptions (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                hostname NVARCHAR(255) UNIQUE,
+                printer_model NVARCHAR(255),
+                location NVARCHAR(255),
+                division NVARCHAR(255)
+            )
+            """
+            cursor.execute(create_table_sql)
+            conn.commit()
+            logging.info("Table 'printer_exceptions' created successfully.")
+        else:
+            logging.info("Table 'printer_exceptions' already exists.")
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error creating printer_exceptions table: {e}")
+        from flask import flash
+        flash(f"Error creating printer_exceptions table: {e}")
+
 import time
 
 def insert_data_to_db(df):
