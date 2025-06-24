@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}Printer Exceptions{% endblock %}
+
+{% block content %}
+<style>
+  body {
+    font-family: 'Roboto', sans-serif;
+  }
+  #printersTable th, #printersTable td {
+    white-space: normal !important;
+    word-wrap: break-word;
+  }
+
+  /* Enhanced card shadows and hover effect */
+  .card {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transition: box-shadow 0.3s ease;
+  }
+  .card:hover {
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+  }
+
+  /* Specific container styles for Add Exceptions and Existing Exceptions */
+  .col-md-6 > .card {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+  }
+
+  /* Table row hover effect with shadow */
+  #printersTable tbody tr:hover,
+  .table-striped tbody tr:hover {
+    background-color: #f1f5f9;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  /* Button hover effects */
+  button.btn-primary,
+  button.btn-danger {
+    transition: box-shadow 0.3s ease, background-color 0.3s ease;
+  }
+  button.btn-primary:hover {
+    background-color: #0056b3;
+    box-shadow: 0 4px 12px rgba(0, 86, 179, 0.5);
+  }
+  button.btn-danger:hover {
+    background-color: #b30000;
+    box-shadow: 0 4px 12px rgba(179, 0, 0, 0.5);
+  }
+</style>
+<h2>Printer Exceptions</h2>
+
+{% if message %}
+  <div class="alert alert-success">{{ message }}</div>
+{% endif %}
+{% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card shadow-sm p-3 mb-4">
+      <h4>Add Exceptions</h4>
+
+      <div class="mb-3">
+        <label for="searchInput" class="form-label">Search</label>
+        <input type="text" id="searchInput" class="form-control" placeholder="Search by hostname, printer model or location">
+      </div>
+
+      <div class="mb-3 d-flex gap-2">
+        <div>
+          <label for="divisionFilter" class="form-label">Filter by Division </label>
+          <select id="divisionFilter" class="form-select">
+            <option value="">All</option>
+            {% for division in divisions %}
+            <option value="{{ division }}">{{ division }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>|</div>
+        <div>
+          <label for="locationFilter" class="form-label"> Filter by Location</label>
+          <select id="locationFilter" class="form-select">
+            <option value="">All</option>
+            {% for location in locations %}
+            <option value="{{ location }}">{{ location }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <form method="post" action="{{ url_for('exceptions') }}">
+        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; width: 100%;">
+          {% if printers %}
+          <table id="printersTable" class="table table-sm table-hover">
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Hostname</th>
+                  <th>Printer Model</th>
+                  <th>Location</th>
+                  <th>Division</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for printer in printers %}
+                <tr>
+                  <td><input type="checkbox" name="selected_printers" value="{{ printer.id }}"></td>
+                  <td class="hostname">{{ printer.hostname }}</td>
+                  <td class="printer_model">{{ printer.printer_model or '' }}</td>
+                  <td class="location">{{ printer.location or '' }}</td>
+                  <td class="division">{{ printer.division or '' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <p>No printers found.</p>
+          {% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary mt-2">Add Selected Printers as Exceptions</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm p-3 mb-4">
+      <h4>Existing Exceptions</h4>
+      {% if exceptions %}
+            <table class="table table-striped table-bordered">
+              <thead>
+                <tr>
+                  <th>Hostname</th>
+                  <th>Printer Model</th>
+                  <th>Location</th>
+                  <th>Division</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ex in exceptions %}
+                <tr>
+                  <td>{{ ex.hostname }}</td>
+                  <td>{{ ex.printer_model or '' }}</td>
+                  <td>{{ ex.location or '' }}</td>
+                  <td>{{ ex.division or '' }}</td>
+                  <td>
+                    <form method="post" action="{{ url_for('delete_exception', exception_id=ex.id) }}" onsubmit="return confirm('Are you sure you want to delete this exception?');">
+                      <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+      {% else %}
+        <p>No exceptions found.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const divisionFilter = document.getElementById('divisionFilter');
+    const locationFilter = document.getElementById('locationFilter');
+    const table = document.getElementById('printersTable');
+    const rows = table ? table.getElementsByTagName('tbody')[0].getElementsByTagName('tr') : [];
+
+    function filterTable() {
+      const searchText = searchInput.value.toLowerCase();
+      const selectedDivision = divisionFilter.value;
+      const selectedLocation = locationFilter.value;
+
+      for (let row of rows) {
+        const hostname = row.querySelector('.hostname').textContent.toLowerCase();
+        const printerModel = row.querySelector('.printer_model').textContent.toLowerCase();
+        const division = row.querySelector('.division').textContent;
+        const location = row.querySelector('.location').textContent;
+
+        const locationText = row.querySelector('.location').textContent.toLowerCase();
+        const matchesSearch = hostname.includes(searchText) || printerModel.includes(searchText) || locationText.includes(searchText);
+        const matchesDivision = !selectedDivision || division === selectedDivision;
+        const matchesLocation = !selectedLocation || location === selectedLocation;
+
+        if (matchesSearch && matchesDivision && matchesLocation) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      }
+    }
+
+    searchInput.addEventListener('input', filterTable);
+    divisionFilter.addEventListener('change', filterTable);
+    locationFilter.addEventListener('change', filterTable);
+  });
+</script>
+{% endblock %}

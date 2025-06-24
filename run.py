@@ -112,6 +112,34 @@ def create_printer_data_table_if_not_exists():
         from flask import flash
         flash(f"Error creating printer_data table: {e}")
 
+def create_printer_exceptions_table_if_not_exists():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sysobjects WHERE name='printer_exceptions' AND xtype='U'")
+        result = cursor.fetchone()
+        if not result:
+            create_table_sql = """
+            CREATE TABLE printer_exceptions (
+                id INT IDENTITY(1,1) PRIMARY KEY,
+                hostname NVARCHAR(255) UNIQUE,
+                printer_model NVARCHAR(255),
+                location NVARCHAR(255),
+                division NVARCHAR(255)
+            )
+            """
+            cursor.execute(create_table_sql)
+            conn.commit()
+            logging.info("Table 'printer_exceptions' created successfully.")
+        else:
+            logging.info("Table 'printer_exceptions' already exists.")
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error creating printer_exceptions table: {e}")
+        from flask import flash
+        flash(f"Error creating printer_exceptions table: {e}")
+
 import time
 
 def insert_data_to_db(df):
@@ -731,7 +759,11 @@ def dashboard():
 
     try:
         engine = get_sqlalchemy_engine()
-        query = "SELECT user_name, printer_model, hostname, location, division, pages_printed, date, month, week FROM printer_logs"
+        query = """
+            SELECT user_name, printer_model, hostname, location, division, pages_printed, date, month, week
+            FROM printer_logs
+            WHERE hostname NOT IN (SELECT hostname FROM printer_exceptions)
+        """
         df = pd.read_sql_query(query, engine)
         engine.dispose()
 
@@ -935,5 +967,115 @@ def dashboard_export():
 
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+from flask import request
+
+@app.route('/exceptions', methods=['GET', 'POST'])
+def exceptions():
+    engine = get_sqlalchemy_engine()
+    message = None
+    error = None
+
+    # Fetch all printers from printer_data to show in UI
+    try:
+        with engine.connect() as conn:
+            printers_result = conn.execute(text("SELECT id, hostname, printer_model, location, division FROM printer_data ORDER BY hostname"))
+            printers_list = [dict(row._mapping) for row in printers_result]
+
+            # Fetch distinct divisions and locations for filters
+            divisions_result = conn.execute(text("SELECT DISTINCT division FROM printer_data WHERE division IS NOT NULL ORDER BY division"))
+            divisions = [row[0] for row in divisions_result]
+
+            locations_result = conn.execute(text("SELECT DISTINCT location FROM printer_data WHERE location IS NOT NULL ORDER BY location"))
+            locations = [row[0] for row in locations_result]
+
+    except Exception as e:
+        printers_list = []
+        divisions = []
+        locations = []
+        error = f"Error fetching printers or filters: {e}"
+
+    if request.method == 'POST':
+        # Handle adding multiple selected printers as exceptions
+        selected_printer_ids = request.form.getlist('selected_printers')
+        if not selected_printer_ids:
+            error = "No printers selected to add as exceptions."
+        else:
+            try:
+                with engine.begin() as conn:
+                    added_count = 0
+                    for pid in selected_printer_ids:
+                        # Fetch printer details by id
+                        printer = conn.execute(
+                            text("SELECT hostname, printer_model, location, division FROM printer_data WHERE id = :id"),
+                            {'id': pid}
+                        ).fetchone()
+                        if printer:
+                            # Check if exception already exists
+                            existing = conn.execute(
+                                text("SELECT id FROM printer_exceptions WHERE hostname = :hostname"),
+                                {'hostname': printer.hostname}
+                            ).fetchone()
+                            if not existing:
+                                conn.execute(
+                                    text("""
+                                        INSERT INTO printer_exceptions (hostname, printer_model, location, division)
+                                        VALUES (:hostname, :printer_model, :location, :division)
+                                    """),
+                                    {
+                                        'hostname': printer.hostname,
+                                        'printer_model': printer.printer_model,
+                                        'location': printer.location,
+                                        'division': printer.division
+                                    }
+                                )
+                                added_count += 1
+                    message = f"Added {added_count} printer(s) to exceptions."
+            except Exception as e:
+                error = f"Error adding exceptions: {e}"
+
+    # Fetch all exceptions to display
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT id, hostname, printer_model, location, division FROM printer_exceptions ORDER BY hostname"))
+            exceptions_list = [dict(row._mapping) for row in result]
+    except Exception as e:
+        exceptions_list = []
+        error = f"Error fetching exceptions: {e}"
+
+    engine.dispose()
+
+    return render_template('exceptions.html', exceptions=exceptions_list, printers=printers_list, divisions=divisions, locations=locations, message=message, error=error)
+
+from flask import redirect
+
+@app.route('/exceptions/delete/<int:exception_id>', methods=['POST'])
+def delete_exception(exception_id):
+    engine = get_sqlalchemy_engine()
+    message = None
+    error = None
+    try:
+        with engine.begin() as conn:
+            # Check if exception exists
+            existing = conn.execute(
+                text("SELECT id FROM printer_exceptions WHERE id = :id"),
+                {'id': exception_id}
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    text("DELETE FROM printer_exceptions WHERE id = :id"),
+                    {'id': exception_id}
+                )
+                message = "Exception deleted successfully."
+            else:
+                error = "Exception not found."
+    except Exception as e:
+        error = f"Error deleting exception: {e}"
+    engine.dispose()
+    # Redirect back to exceptions page with message or error flashed
+    if message:
+        flash(message)
+    if error:
+        flash(error)
+    return redirect(url_for('exceptions'))
+
+app.run(host='0.0.0.0', port=5000, debug=True)
