@@ -3,6 +3,40 @@
 {% block title %}Upload Logs - Printer Desk{% endblock %}
 
 {% block content %}
+<script>
+  document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // Stop default form submission
+
+    const formData = new FormData(this);
+    document.getElementById('uploadButton').style.display = 'none';
+    document.getElementById('uploadingText').style.display = 'inline';
+    startDotsAnimation();
+
+    fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      clearInterval(dotsInterval);
+      document.getElementById('uploadingText').style.display = 'none';
+      document.getElementById('uploadButton').style.display = 'inline';
+
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'flash-messages';
+      msgDiv.innerHTML = `<ul><li>${data.message}</li></ul>`;
+      document.querySelector('.upload-wrapper').appendChild(msgDiv);
+    })
+    .catch(err => {
+      clearInterval(dotsInterval);
+      document.getElementById('uploadingText').style.display = 'none';
+      document.getElementById('uploadButton').style.display = 'inline';
+      alert("Error uploading file.");
+      console.error(err);
+    });
+  });
+</script>
+
   <div class="container" style="background: linear-gradient(135deg, #f9fafb 0%, #e0e7ff 100%); border-radius: 20px; padding: 40px 30px; box-shadow: 0 12px 25px rgba(100, 100, 250, 0.1); margin-top: -40px;">
     <div class="row align-items-stretch" style="min-height: 520px;">
 
@@ -10,7 +44,8 @@
       <div class="col-md-6 d-flex flex-column">
         <div class="upload-wrapper flex-grow-1 d-flex flex-column justify-content-center shadow-sm" style="margin: 10px 0;">
           <h3>Upload Data (Excel)</h3>
-          <form id="uploadForm" method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+          <form id="uploadForm" method="post" enctype="multipart/form-data">
+
 
             <input type="file" name="file" accept=".xlsx, .xls" required>
             <br>
