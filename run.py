@@ -12,6 +12,7 @@ SQL_DATABASE = 'PrintDesk'
 SQL_USERNAME = 'sa'
 SQL_PASSWORD = 'Sql@2025'
 
+
 def get_db_connection():
     conn_str = (
         f'DRIVER={SQL_DRIVER};'
@@ -614,10 +615,16 @@ def view():
 
     # Handle global search across all columns
     search_term = request.args.get("search", "").strip()
+    date_search = request.args.get("date_search", "").strip()
     if search_term:
         search_clauses = [f"{col} LIKE :search" for col in columns]
         filters.append("(" + " OR ".join(search_clauses) + ")")
         params["search"] = f"%{search_term}%"
+
+    if date_search:
+        # Search date column for exact date match
+        filters.append("CAST(date AS DATE) = :date_search")
+        params["date_search"] = date_search
 
     # Handle column-specific filters
     for col in columns:
