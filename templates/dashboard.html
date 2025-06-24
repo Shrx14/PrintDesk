@@ -9,28 +9,12 @@
     const dateInputWrapper = document.getElementById('date_input_wrapper');
     const monthInputWrapper = document.getElementById('month_input_wrapper');
     const weekSelectWrapper = document.getElementById('week_select_wrapper');
+    const yearInputWrapper = document.getElementById('year_input_wrapper');
 
-    if (timeFilter === 'daily') {
-      dateInputWrapper.classList.remove('d-none');
-      monthInputWrapper.classList.add('d-none');
-      weekSelectWrapper.classList.add('d-none');
-    } else if (timeFilter === 'weekly') {
-      dateInputWrapper.classList.add('d-none');
-      monthInputWrapper.classList.remove('d-none');
-      weekSelectWrapper.classList.remove('d-none');
-    } else if (timeFilter === 'monthly') {
-      dateInputWrapper.classList.add('d-none');
-      monthInputWrapper.classList.remove('d-none');
-      weekSelectWrapper.classList.add('d-none');
-    } else if (timeFilter === 'yearly') {
-      dateInputWrapper.classList.add('d-none');
-      monthInputWrapper.classList.add('d-none');
-      weekSelectWrapper.classList.add('d-none');
-    } else {
-      dateInputWrapper.classList.add('d-none');
-      monthInputWrapper.classList.add('d-none');
-      weekSelectWrapper.classList.add('d-none');
-    }
+    dateInputWrapper.classList.toggle('d-none', timeFilter !== 'daily');
+    monthInputWrapper.classList.toggle('d-none', !(timeFilter === 'monthly' || timeFilter === 'weekly'));
+    weekSelectWrapper.classList.toggle('d-none', timeFilter !== 'weekly');
+    yearInputWrapper.classList.toggle('d-none', timeFilter !== 'yearly');
   }
 
   window.addEventListener('DOMContentLoaded', updateDateInputVisibility);
@@ -38,12 +22,43 @@
 
 <h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
 
+{% if time_filter == 'monthly' and division_filter in ['PT', 'PY'] and not request.query_string %}
+  <div class="alert alert-info text-center">
+    Showing default data for <strong>last month</strong> and <strong>{{ division_filter }}</strong> division.
+  </div>
+  <div class="text-center mb-4">
+    <a href="{{ url_for('dashboard', time_filter='monthly', division_filter='PY' if division_filter == 'PT' else 'PT', month_input=month_input) }}"
+       class="btn btn-outline-secondary">
+      Switch to {{ 'PY' if division_filter == 'PT' else 'PT' }} Division
+    </a>
+  </div>
+{% endif %}
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <div class="container mt-3">
+      {% for message in messages %}
+        <div class="alert alert-info text-center" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
 {% if data is none %}
   <div class="alert alert-warning text-center">
     No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
   </div>
 {% else %}
-  <form method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
+  {% if data.empty %}
+    <div class="alert alert-info text-center">
+      No data found for the selected filters.
+    </div>
+  {% endif %}
+
+  <!-- Filters -->
+  <form id="filterForm" method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
     <div class="col-md-3">
       <label for="time_filter" class="form-label">Filter by Time</label>
       <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
@@ -65,6 +80,15 @@
       </select>
     </div>
 
+    <div class="col-md-3">
+      <label for="division_filter" class="form-label">Filter by Division</label>
+      <select id="division_filter" name="division_filter" class="form-select">
+        <option value="all" {% if division_filter == 'all' %}selected{% endif %}>All</option>
+        <option value="PT" {% if division_filter == 'PT' %}selected{% endif %}>PT</option>
+        <option value="PY" {% if division_filter == 'PY' %}selected{% endif %}>PY</option>
+      </select>
+    </div>
+
     <div class="col-md-3 d-none" id="date_input_wrapper">
       <label for="date_input" class="form-label">Date</label>
       <input name="date_input" id="date_input" type="date" value="{{ date_input or '' }}" class="form-control">
@@ -78,63 +102,123 @@
     <div class="col-md-3 d-none" id="week_select_wrapper">
       <label for="week_select" class="form-label">Week</label>
       <select id="week_select" name="week_select" class="form-select">
-        <option value="1" {% if week_select == '1' %}selected{% endif %}>Week 1</option>
-        <option value="2" {% if week_select == '2' %}selected{% endif %}>Week 2</option>
-        <option value="3" {% if week_select == '3' %}selected{% endif %}>Week 3</option>
-        <option value="4" {% if week_select == '4' %}selected{% endif %}>Week 4</option>
-        <option value="5" {% if week_select == '5' %}selected{% endif %}>Week 5</option>
+        {% for i in range(1, 6) %}
+          <option value="{{ i }}" {% if week_select == i|string %}selected{% endif %}>Week {{ i }}</option>
+        {% endfor %}
       </select>
     </div>
 
+    <div class="col-md-3 d-none" id="year_input_wrapper">
+      <label for="year_input" class="form-label">Year</label>
+      <input name="year_input" id="year_input" type="number" min="2000" max="2100" value="{{ year_input or '' }}" class="form-control">
+    </div>
+
     <div class="col-md-3 text-end">
-      <button type="submit" class="btn btn-primary">Apply Filters</button>
+      <button id="applyFiltersBtn" type="submit" class="btn btn-primary w-100">
+        Apply Filters
+        <span id="loadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+      </button>
+    </div>
+
+    <div class="col-md-3">
+      <a id="exportExcelBtn" href="{{ url_for('dashboard_export', time_filter=time_filter, location_filter=location_filter, division_filter=division_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success w-100">
+        ⬇️ Export to Excel
+        <span id="exportLoadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+      </a>
     </div>
   </form>
 
-  <div class="row g-4">
-    <div class="col-md-4">
-      <div class="card border-primary shadow-sm">
-        <div class="card-header bg-primary text-white">Top 10 Users</div>
-        <ul class="list-group list-group-flush">
-          {% for user, pages in top_users.items() %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-
-    <div class="col-md-4">
-      <div class="card border-success shadow-sm">
-        <div class="card-header bg-success text-white">Top 10 Printers</div>
-        <ul class="list-group list-group-flush">
-          {% for printer, pages in top_printers.items() %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-
-    <div class="col-md-4">
-      <div class="card border-danger shadow-sm">
-        <div class="card-header bg-danger text-white">Least Used Printers</div>
-        <ul class="list-group list-group-flush">
-          {% for printer, pages in least_printers.items() %}
-            <li class="list-group-item d-flex justify-content-between">
-              <span>{{ printer }}</span><span class="fw-bold">{{ pages }}</span>
-            </li>
-          {% endfor %}
-        </ul>
+  <!-- Top 10 Printers -->
+  <div class="mb-4">
+    <div class="card border-success shadow-sm">
+      <div class="card-header bg-success text-white">Top 10 Printers</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Printer Model</th>
+              <th>Hostname</th>
+              <th>Location</th>
+              <th>Pages Printed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for printer, info in top_printers.items() %}
+              <tr>
+                <td>{{ printer }}</td>
+                <td>{{ info.hostname }}</td>
+                <td>{{ info.location }}</td>
+                <td class="fw-bold">{{ info.pages_printed }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
+
+  <!-- Least Used Printers -->
+  <div class="mb-4">
+    <div class="card border-danger shadow-sm">
+      <div class="card-header bg-danger text-white">Least Used Printers</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Printer Model</th>
+              <th>Hostname</th>
+              <th>Location</th>
+              <th>Pages Printed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for printer, info in least_printers.items() %}
+              <tr>
+                <td>{{ printer }}</td>
+                <td>{{ info.hostname }}</td>
+                <td>{{ info.location }}</td>
+                <td class="fw-bold">{{ info.pages_printed }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top 10 Users -->
+  <div class="col-md-4 mb-4">
+    <div class="card border-primary shadow-sm">
+      <div class="card-header bg-primary text-white">Top 10 Users</div>
+      <ul class="list-group list-group-flush">
+        {% for user, pages in top_users.items() %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ user }}</span><span class="fw-bold">{{ pages }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
 {% endif %}
 
-<div class="mt-5 text-center">
-  <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
-  <a href="{{ url_for('view') }}" class="btn btn-outline-info">📄 View Data</a>
-</div>
-{% endblock %} 
+<script>
+  document.getElementById('filterForm').addEventListener('submit', function () {
+    const btn = document.getElementById('applyFiltersBtn');
+    const spinner = document.getElementById('loadingSpinner');
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+  });
+
+  document.getElementById('exportExcelBtn').addEventListener('click', function (event) {
+    const btn = event.currentTarget;
+    const spinner = document.getElementById('exportLoadingSpinner');
+    btn.classList.add('disabled');
+    spinner.classList.remove('d-none');
+    setTimeout(() => {
+      btn.classList.remove('disabled');
+      spinner.classList.add('d-none');
+    }, 5000); // Hide spinner and enable button after 5 seconds
+  });
+</script>
+{% endblock %}

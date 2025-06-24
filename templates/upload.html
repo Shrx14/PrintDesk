@@ -37,95 +37,181 @@
   });
 </script>
 
-  <div class="upload-wrapper">
-    <h3>Upload Data (Excel)</h3>
-    <form id="uploadForm" method="post" enctype="multipart/form-data">
+  <div class="container" style="background: linear-gradient(135deg, #f9fafb 0%, #e0e7ff 100%); border-radius: 20px; padding: 40px 30px; box-shadow: 0 12px 25px rgba(100, 100, 250, 0.1); margin-top: -40px;">
+    <div class="row align-items-stretch" style="min-height: 520px;">
+
+      <!-- Upload Form (Left) -->
+      <div class="col-md-6 d-flex flex-column">
+        <div class="upload-wrapper flex-grow-1 d-flex flex-column justify-content-center shadow-sm" style="margin: 10px 0;">
+          <h3>Upload Data (Excel)</h3>
+          <form id="uploadForm" method="post" enctype="multipart/form-data">
 
 
-      <input type="file" name="file" required>
-      <br>
-      <input type="submit" id="uploadButton" value="Upload">
-      <div id="uploadingText" style="display:none; font-weight: 600; color: #4f46e5; font-size: 1.1rem;">
-        Uploading<span id="dots">...</span>
+            <input type="file" name="file" accept=".xlsx, .xls" required>
+            <br>
+            <input type="submit" id="uploadButton" value="Upload">
+            <div id="uploadingText" style="display:none;">
+              Uploading<span id="dots">...</span>
+            </div>
+            <br><br>
+
+            <a href="{{ url_for('static', filename='demo excel/demo_Excel.xlsx') }}" download class="download-link">
+              📥 Download Demo Excel File
+            </a>
+          </form>
+
+          {% with messages = get_flashed_messages() %}
+            {% if messages %}
+              <div class="flash-messages">
+                <ul>
+                  {% for msg in messages %}
+                    <li>{{ msg }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
+          {% endwith %}
+        </div>
       </div>
-      <br>
-       <br>
-       
-    <a href="{{ url_for('static', filename='demo excel/demo_Excel.xlsx') }}" download >
-      📥 Download Demo Excel File
-    </a>
-    </form>
 
-   
-
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="flash-messages">
+      <!-- Instructions (Right) -->
+      <div class="col-md-6 d-flex flex-column">
+        <div class="upload-instructions flex-grow-1 d-flex flex-column justify-content-center shadow-sm" style="margin: 10px 0;">
+          <h5>Instructions:</h5>
           <ul>
-            {% for msg in messages %}
-              <li>{{ msg }}</li>
-            {% endfor %}
+            <li>📂 <strong>Upload your Excel file</strong> using the form on the left.</li>
+            <li>✅ Ensure the file is in <strong>Excel format </strong>.</li>
+            <li>⬇️ You can download a sample Excel file by clicking the <strong>Download Demo Excel File</strong> link.</li>
+            <li>📋 Make sure the structure matches the demo file to avoid errors.</li>
           </ul>
         </div>
-      {% endif %}
-    {% endwith %}
-  </div>
-
-  <div class="mt-5 text-center">
-    <a href="{{ url_for('home') }}" class="btn btn-outline-secondary me-2">🏠 Home</a>
-    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">📊 Dashboard</a>
+      </div>
+    </div>
   </div>
 
   <style>
-    .upload-wrapper {
-      max-width: 600px;
-      margin: 60px auto;
+    /* Container & Layout */
+    .upload-wrapper,
+    .upload-instructions {
       background: white;
-      padding: 40px;
-      border-radius: 16px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
-      text-align: center;
+      padding: 35px 40px;
+      border-radius: 18px;
+      height: 100%;
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+      transition: box-shadow 0.3s ease;
     }
 
-    .upload-wrapper h3 {
-      font-size: 1.75rem;
-      font-weight: 600;
+    /* Shadows on hover for subtle interactivity */
+    .upload-wrapper:hover,
+    .upload-instructions:hover {
+      box-shadow: 0 15px 30px rgba(79, 70, 229, 0.2);
+    }
+
+    /* Typography */
+    h3 {
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: #3730a3; /* Indigo-700 */
+      margin-bottom: 25px;
+      letter-spacing: 0.03em;
+    }
+
+    h5 {
+      font-weight: 700;
+      font-size: 1.3rem;
+      color: #3730a3;
       margin-bottom: 20px;
-      color: #2c5282;
+      letter-spacing: 0.02em;
     }
 
+    ul {
+      padding-left: 0;
+      list-style: none;
+      font-size: 1.05rem;
+      color: #475569; /* Slate-600 */
+      line-height: 1.6;
+    }
+
+    ul li {
+      position: relative;
+      padding-left: 28px;
+      margin-bottom: 15px;
+    }
+
+    ul li::before {
+      content: "✔";
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: #4f46e5; /* Indigo-600 */
+      font-weight: 800;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+
+    /* Input file styling */
     input[type="file"] {
-      margin: 20px 0;
+      margin: 20px 0 30px 0;
       width: 100%;
-      padding: 10px;
-      border: 2px dashed #cbd5e0;
-      border-radius: 8px;
-      background-color: #f9fafb;
-      transition: border-color 0.3s ease;
-    }
-
-    input[type="file"]:hover {
-      border-color: #4f46e5;
-    }
-
-    input[type="submit"] {
-      background-color: #4f46e5;
-      color: white;
-      padding: 12px 30px;
-      border: none;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
+      padding: 14px 18px;
+      border: 2.5px dashed #a5b4fc; /* Indigo-300 */
+      border-radius: 12px;
+      background-color: #eef2ff;
+      font-size: 1.05rem;
+      color: #3730a3;
       cursor: pointer;
-      transition: background-color 0.3s ease;
+      transition: border-color 0.3s ease, background-color 0.3s ease;
     }
 
-    input[type="submit"]:hover {
-      background-color: #4338ca;
+    input[type="file"]:hover,
+    input[type="file"]:focus {
+      border-color: #6366f1; /* Indigo-500 */
+      background-color: #e0e7ff;
+      outline: none;
     }
 
+    /* Submit button styling */
+    input[type="submit"] {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: white;
+      padding: 14px 38px;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(79, 70, 229, 0.5);
+      transition: background 0.4s ease, box-shadow 0.3s ease, transform 0.2s ease;
+      user-select: none;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+
+    input[type="submit"]:hover,
+    input[type="submit"]:focus {
+      background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+      box-shadow: 0 10px 25px rgba(67, 56, 202, 0.8);
+      transform: translateY(-2px);
+      outline: none;
+    }
+
+    /* Uploading text */
+    #uploadingText {
+      font-weight: 700;
+      color: #4f46e5;
+      font-size: 1.15rem;
+      margin-bottom: 10px;
+      user-select: none;
+    }
+
+    #dots {
+      font-weight: 700;
+    }
+
+    /* Flash messages styling */
     .flash-messages {
-      margin-top: 20px;
+      margin-top: 25px;
       text-align: left;
     }
 
@@ -135,21 +221,54 @@
     }
 
     .flash-messages li {
-      margin-bottom: 8px;
-      padding: 10px 15px;
-      background-color: #e6fffa;
-      color: #2c7a7b;
-      border-left: 4px solid #38b2ac;
-      border-radius: 6px;
-      font-weight: 500;
-      text-align: left;
+      margin-bottom: 10px;
+      padding: 12px 18px;
+      background-color: #d1fae5;
+      color: #065f46;
+      border-left: 5px solid #10b981;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      user-select: none;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
     }
 
-    /* Uploading text animation */
-    #uploadingText {
+    /* Download link styling - CENTERED */
+    .download-link {
+      display: block;
+      margin: 20px auto 0 auto; /* centers horizontally */
+      text-align: center;
       font-weight: 600;
+      font-size: 1rem;
       color: #4f46e5;
-      font-size: 1.1rem;
+      text-decoration: none;
+      transition: color 0.3s ease, transform 0.25s ease;
+      max-width: fit-content;
+    }
+
+    .download-link:hover {
+      color: #3730a3;
+      text-decoration: underline;
+      transform: translateX(5px);
+    }
+
+    /* Responsive tweaks */
+    @media (max-width: 768px) {
+      .upload-wrapper,
+      .upload-instructions {
+        margin: 15px 0;
+        padding: 30px 20px;
+        text-align: center;
+      }
+
+      .download-link {
+        display: block;
+        margin-top: 25px;
+      }
+
+      ul li {
+        padding-left: 20px;
+      }
     }
   </style>
 
@@ -165,11 +284,10 @@
       }, 500);
     }
 
-    document.getElementById('uploadForm').addEventListener('submit', function() {
+    document.getElementById('uploadForm').addEventListener('submit', function () {
       document.getElementById('uploadButton').style.display = 'none';
       document.getElementById('uploadingText').style.display = 'inline';
       startDotsAnimation();
     });
   </script>
 {% endblock %}
-</create_file>
