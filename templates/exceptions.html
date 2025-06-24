@@ -116,46 +116,48 @@
                 </tr>
                 {% endfor %}
               </tbody>
-            </table>
+          </table>
           {% else %}
             <p>No printers found.</p>
           {% endif %}
         </div>
         <button type="submit" class="btn btn-primary mt-2">Add Selected Printers as Exceptions</button>
+        <button type="submit" name="add_zero_pages" value="true" class="btn btn-warning mt-2">Add All Zero Pages Printed Printers to Exceptions</button>
       </form>
     </div>
   </div>
-
+  
   <div class="col-md-6">
     <div class="card shadow-sm p-3 mb-4">
       <h4>Existing Exceptions</h4>
-      {% if exceptions %}
-            <table class="table table-striped table-bordered">
-              <thead>
-                <tr>
-                  <th>Hostname</th>
-                  <th>Printer Model</th>
-                  <th>Location</th>
-                  <th>Division</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for ex in exceptions %}
-                <tr>
-                  <td>{{ ex.hostname }}</td>
-                  <td>{{ ex.printer_model or '' }}</td>
-                  <td>{{ ex.location or '' }}</td>
-                  <td>{{ ex.division or '' }}</td>
-                  <td>
-                    <form method="post" action="{{ url_for('delete_exception', exception_id=ex.id) }}" onsubmit="return confirm('Are you sure you want to delete this exception?');">
-                      <button type="submit" class="btn btn-sm btn-danger">Remove</button>
-                    </form>
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; width: 100%;">
+          {% if exceptions %}
+          <table class="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th>Hostname</th>
+                <th>Printer Model</th>
+                <th>Location</th>
+                <th>Division</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ex in exceptions %}
+              <tr>
+                <td>{{ ex.hostname }}</td>
+                <td>{{ ex.printer_model or '' }}</td>
+                <td>{{ ex.location or '' }}</td>
+                <td>{{ ex.division or '' }}</td>
+                <td>
+                  <form method="post" action="{{ url_for('delete_exception', exception_id=ex.id) }}" onsubmit="return confirm('Are you sure you want to delete this exception?');">
+                    <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
       {% else %}
         <p>No exceptions found.</p>
       {% endif %}

@@ -995,43 +995,83 @@ def exceptions():
         error = f"Error fetching printers or filters: {e}"
 
     if request.method == 'POST':
-        # Handle adding multiple selected printers as exceptions
-        selected_printer_ids = request.form.getlist('selected_printers')
-        if not selected_printer_ids:
-            error = "No printers selected to add as exceptions."
-        else:
+        # Check if adding all zero pages printed printers
+        if request.form.get('add_zero_pages'):
             try:
                 with engine.begin() as conn:
+                    # Query printers with zero pages printed
+                    zero_pages_printers = conn.execute(text("""
+                        SELECT pd.id, pd.hostname, pd.printer_model, pd.location, pd.division
+                        FROM printer_data pd
+                        LEFT JOIN (
+                            SELECT hostname, SUM(pages_printed) AS total_pages
+                            FROM printer_logs
+                            GROUP BY hostname
+                        ) pl ON pd.hostname = pl.hostname
+                        WHERE ISNULL(pl.total_pages, 0) = 0
+                    """)).fetchall()
+
                     added_count = 0
-                    for pid in selected_printer_ids:
-                        # Fetch printer details by id
-                        printer = conn.execute(
-                            text("SELECT hostname, printer_model, location, division FROM printer_data WHERE id = :id"),
-                            {'id': pid}
+                    for printer in zero_pages_printers:
+                        existing = conn.execute(
+                            text("SELECT id FROM printer_exceptions WHERE hostname = :hostname"),
+                            {'hostname': printer.hostname}
                         ).fetchone()
-                        if printer:
-                            # Check if exception already exists
-                            existing = conn.execute(
-                                text("SELECT id FROM printer_exceptions WHERE hostname = :hostname"),
-                                {'hostname': printer.hostname}
-                            ).fetchone()
-                            if not existing:
-                                conn.execute(
-                                    text("""
-                                        INSERT INTO printer_exceptions (hostname, printer_model, location, division)
-                                        VALUES (:hostname, :printer_model, :location, :division)
-                                    """),
-                                    {
-                                        'hostname': printer.hostname,
-                                        'printer_model': printer.printer_model,
-                                        'location': printer.location,
-                                        'division': printer.division
-                                    }
-                                )
-                                added_count += 1
-                    message = f"Added {added_count} printer(s) to exceptions."
+                        if not existing:
+                            conn.execute(
+                                text("""
+                                    INSERT INTO printer_exceptions (hostname, printer_model, location, division)
+                                    VALUES (:hostname, :printer_model, :location, :division)
+                                """),
+                                {
+                                    'hostname': printer.hostname,
+                                    'printer_model': printer.printer_model,
+                                    'location': printer.location,
+                                    'division': printer.division
+                                }
+                            )
+                            added_count += 1
+                message = f"Added {added_count} zero pages printed printer(s) to exceptions."
             except Exception as e:
-                error = f"Error adding exceptions: {e}"
+                error = f"Error adding zero pages printed exceptions: {e}"
+        else:
+            # Handle adding multiple selected printers as exceptions
+            selected_printer_ids = request.form.getlist('selected_printers')
+            if not selected_printer_ids:
+                error = "No printers selected to add as exceptions."
+            else:
+                try:
+                    with engine.begin() as conn:
+                        added_count = 0
+                        for pid in selected_printer_ids:
+                            # Fetch printer details by id
+                            printer = conn.execute(
+                                text("SELECT hostname, printer_model, location, division FROM printer_data WHERE id = :id"),
+                                {'id': pid}
+                            ).fetchone()
+                            if printer:
+                                # Check if exception already exists
+                                existing = conn.execute(
+                                    text("SELECT id FROM printer_exceptions WHERE hostname = :hostname"),
+                                    {'hostname': printer.hostname}
+                                ).fetchone()
+                                if not existing:
+                                    conn.execute(
+                                        text("""
+                                            INSERT INTO printer_exceptions (hostname, printer_model, location, division)
+                                            VALUES (:hostname, :printer_model, :location, :division)
+                                        """),
+                                        {
+                                            'hostname': printer.hostname,
+                                            'printer_model': printer.printer_model,
+                                            'location': printer.location,
+                                            'division': printer.division
+                                        }
+                                    )
+                                    added_count += 1
+                        message = f"Added {added_count} printer(s) to exceptions."
+                except Exception as e:
+                    error = f"Error adding exceptions: {e}"
 
     # Fetch all exceptions to display
     try:
