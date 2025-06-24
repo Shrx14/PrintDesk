@@ -20,6 +20,53 @@
   window.addEventListener('DOMContentLoaded', updateDateInputVisibility);
 </script>
 
+<script>
+  async function fetchAndDisplayGraphs() {
+    const params = new URLSearchParams(new FormData(document.getElementById('filterForm')));
+    const response = await fetch('/dashboard/visualize?' + params.toString());
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success) {
+        document.getElementById('graphsContainer').innerHTML = `
+          <div class="row">
+            <div class="col-md-6 mb-4">
+              <h5>Pages Printed Over Time</h5>
+              <img src="data:image/png;base64,${data.graph1}" class="img-fluid" alt="Graph 1">
+            </div>
+            <div class="col-md-6 mb-4">
+              <h5>Pages Printed by Location (10 Least Used Printers)</h5>
+              <img src="data:image/png;base64,${data.graph2}" class="img-fluid" alt="Graph 2">
+            </div>
+            <div class="col-md-6 mb-4">
+              <h5>Pages Printed by Location (Top 10 Used Printers)</h5>
+              <img src="data:image/png;base64,${data.graph3}" class="img-fluid" alt="Graph 3">
+            </div>
+            <div class="col-md-6 mb-4">
+              <h5>Last 3 Months Pages Printed (10 Least Used Printers)</h5>
+              <img src="data:image/png;base64,${data.graph4}" class="img-fluid" alt="Graph 4">
+            </div>
+          </div>
+        `;
+      } else {
+        alert('Error generating graphs: ' + data.message);
+      }
+    } else {
+      alert('Failed to fetch graphs from server.');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('visualizeBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('graphLoadingSpinner').classList.remove('d-none');
+      document.getElementById('graphsContainer').innerHTML = '';
+      fetchAndDisplayGraphs().finally(() => {
+        document.getElementById('graphLoadingSpinner').classList.add('d-none');
+      });
+    });
+  });
+</script>
+
 <h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
 
 {% if time_filter == 'monthly' and division_filter in ['PT', 'PY'] and not request.query_string %}
@@ -127,6 +174,20 @@
       </a>
     </div>
   </form>
+
+  <!-- Visualization Button -->
+  <div class="text-end mb-3">
+    <button id="visualizeBtn" class="btn btn-info">📈 Visualize</button>
+  </div>
+
+  <!-- Spinner for Loading State -->
+  <div id="graphLoadingSpinner" class="text-center d-none">
+    <div class="spinner-border text-info" role="status"></div>
+    <p>Loading graphs...</p>
+  </div>
+
+  <!-- Graphs will appear here -->
+  <div id="graphsContainer" class="mb-4"></div>
 
   <!-- Top 10 Printers -->
   <div class="mb-4">

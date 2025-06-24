@@ -1125,4 +1125,154 @@ def delete_exception(exception_id):
         flash(error)
     return redirect(url_for('exceptions'))
 
+import matplotlib
+matplotlib.use('Agg')  # Use non-GUI backend to avoid tkinter errors
+import matplotlib.pyplot as plt
+import base64
+from io import BytesIO
+import pandas as pd
+import numpy as np
+from flask import jsonify
+
+@app.route('/dashboard/visualize')
+def dashboard_visualize():
+    try:
+        # Parse filters from query parameters
+        time_filter = request.args.get('time_filter')
+        location_filter = request.args.get('location_filter')
+        division_filter = request.args.get('division_filter')
+        date_input = request.args.get('date_input')
+        month_input = request.args.get('month_input')
+        year_input = request.args.get('year_input')
+        week_select = request.args.get('week_select')
+
+        engine = get_sqlalchemy_engine()
+        query = """
+            SELECT user_name, printer_model, hostname, location, division, pages_printed, date, month, week
+            FROM printer_logs
+            WHERE hostname NOT IN (SELECT hostname FROM printer_exceptions)
+        """
+        df = pd.read_sql_query(query, engine)
+        engine.dispose()
+
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+        # Apply location filter
+        if location_filter and location_filter != 'all':
+            df = df[df['location'] == location_filter]
+
+        # Apply division filter
+        if division_filter and division_filter != 'all':
+            df = df[df['division'] == division_filter]
+
+        # Apply time filters
+        if time_filter == 'daily' and date_input:
+            filter_date = pd.to_datetime(date_input, errors='coerce')
+            if not pd.isna(filter_date):
+                df = df[df['date'].dt.date == filter_date.date()]
+        elif time_filter == 'weekly' and month_input and week_select:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            if not pd.isna(filter_date):
+                month_str = filter_date.strftime("%b'%y")
+                week_str = f"Week {week_select}"
+                df = df[(df['month'] == month_str) & (df['week'] == week_str)]
+        elif time_filter == 'monthly' and month_input:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            if not pd.isna(filter_date):
+                month_str = filter_date.strftime("%b'%y")
+                df = df[df['month'] == month_str]
+        elif time_filter == 'yearly' and year_input:
+            try:
+                year_int = int(year_input)
+                df = df[df['date'].dt.year == year_int]
+            except ValueError:
+                pass
+
+        # Prepare data for graphs
+        # 1. Pages Printed Over Time (daily or monthly depending on filter)
+        if time_filter in ['daily', 'weekly']:
+            df_time = df.groupby(df['date'].dt.date)['pages_printed'].sum()
+        else:
+            df_time = df.groupby('month')['pages_printed'].sum()
+
+        # 2. Pages Printed by Location (10 Least Used Printers)
+        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
+
+        # 3. Pages Printed by Location (Top 10 Used Printers)
+        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10)
+
+        # 4. Last 3 Months Pages Printed (10 Least Used Printers)
+        last_3_months = pd.Timestamp.now() - pd.DateOffset(months=3)
+        df_last_3_months = df[df['date'] >= last_3_months]
+        least_printers_3m = df_last_3_months.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
+
+        # Helper function to plot and encode to base64
+        def plot_to_base64(fig):
+            buf = BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight')
+            buf.seek(0)
+            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            plt.close(fig)
+            return img_base64
+
+        # Graph 1: Pages Printed Over Time
+        fig1, ax1 = plt.subplots(figsize=(8, 4))
+        if time_filter in ['daily', 'weekly']:
+            df_time.plot(kind='bar', ax=ax1, color='blue')
+            ax1.set_xlabel('Date')
+        else:
+            # Convert month strings like "May'25" to datetime for sorting
+            def parse_month_str(m):
+                try:
+                    return pd.to_datetime(m, format="%b'%y")
+                except Exception:
+                    return pd.NaT
+            df_time.index = df_time.index.map(parse_month_str)
+            df_time = df_time.dropna()
+            df_time = df_time.sort_index()
+            df_time.plot(kind='bar', ax=ax1, color='blue')
+            ax1.set_xlabel('Month')
+        ax1.set_title('Pages Printed Over Time')
+        ax1.set_ylabel('Pages Printed')
+        ax1.grid(True)
+        graph1 = plot_to_base64(fig1)
+
+        # Graph 2: Pages Printed by Location (10 Least Used Printers)
+        fig2, ax2 = plt.subplots(figsize=(8, 4))
+        least_printers.plot(kind='bar', ax=ax2, color='red')
+        ax2.set_title('Pages Printed by Location (10 Least Used Printers)')
+        ax2.set_xlabel('Printer Model')
+        ax2.set_ylabel('Pages Printed')
+        ax2.grid(axis='y')
+        graph2 = plot_to_base64(fig2)
+
+        # Graph 3: Pages Printed by Location (Top 10 Used Printers)
+        fig3, ax3 = plt.subplots(figsize=(8, 4))
+        top_printers.plot(kind='bar', ax=ax3, color='green')
+        ax3.set_title('Pages Printed by Location (Top 10 Used Printers)')
+        ax3.set_xlabel('Printer Model')
+        ax3.set_ylabel('Pages Printed')
+        ax3.grid(axis='y')
+        graph3 = plot_to_base64(fig3)
+
+        # Graph 4: Last 3 Months Pages Printed (10 Least Used Printers)
+        fig4, ax4 = plt.subplots(figsize=(8, 4))
+        least_printers_3m.plot(kind='bar', ax=ax4, color='orange')
+        ax4.set_title('Last 3 Months Pages Printed (10 Least Used Printers)')
+        ax4.set_xlabel('Printer Model')
+        ax4.set_ylabel('Pages Printed')
+        ax4.grid(axis='y')
+        graph4 = plot_to_base64(fig4)
+
+        return jsonify({
+            'success': True,
+            'graph1': graph1,
+            'graph2': graph2,
+            'graph3': graph3,
+            'graph4': graph4
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 app.run(host='0.0.0.0', port=5000, debug=True)
