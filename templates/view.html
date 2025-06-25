@@ -14,18 +14,49 @@
     <button id="fullscreen-btn" class="btn btn-outline-dark btn-sm">🔳 Fullscreen</button>
   </div>
 </div>
- <div class="mb-3" style="max-width: 400px;">
-    <input
-      type="date"
-      name="date_search"
-      class="form-control"
-      placeholder="Search by date..."
-      value="{{ request.args.get('date_search', '') }}"
-      onkeypress="if(event.key === 'Enter') document.getElementById('filter-form').submit();"
-    >
-  </div>
+
 {% if data is not none %}
+{% if not request.args.get('from_date') and not request.args.get('to_date') and not request.args.get('search') %}
+    <div class="alert alert-info text-center mb-3">
+      Showing default data for the last month.
+    </div>
+  {% endif %}
+
 <form id="filter-form" method="get" action="{{ url_for('view') }}">
+  <!-- Bootstrap-style floating labels workaround -->
+<div class="row mb-3" style="max-width: 500px;">
+  <div class="col">
+    <div class="form-floating">
+      <input
+        type="date"
+        class="form-control"
+        id="from_date"
+        name="from_date"
+        value="{{ request.args.get('from_date', '') }}"
+      >
+      <label for="from_date">From Date</label>
+    </div>
+  </div>
+  <div class="col">
+    <div class="form-floating">
+      <input
+        type="date"
+        class="form-control"
+        id="to_date"
+        name="to_date"
+        value="{{ request.args.get('to_date', '') }}"
+      >
+      <label for="to_date">To Date</label>
+    </div>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-primary h-100">Filter</button>
+  </div>
+</div>
+
+
+
+  <!-- Global search -->
   <div class="mb-3 d-flex align-items-center" style="max-width: 400px;">
     <input
       type="search"
@@ -41,74 +72,86 @@
     </button>
   </div>
 
- 
-
-
   <div class="d-flex justify-content-end mb-2">
-      {% set query_string = request.query_string.decode('utf-8') %}
-      <button id="download-excel-btn" class="btn btn-success" type="button" style="position: relative; display: flex; align-items: center; gap: 8px;">
-        ⬇️ Download as Excel
-        <div id="loading-spinner" style="display:none; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite;">
-        </div>
-      </button>
+    {% set query_string = request.query_string.decode('utf-8') %}
+    <button id="download-excel-btn" class="btn btn-success" type="button" style="position: relative; display: flex; align-items: center; gap: 8px;">
+      ⬇️ Download as Excel
+      <div id="loading-spinner" style="display:none; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite;">
+      </div>
+    </button>
 
-      <style>
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      </style>
-
-      <iframe id="download-iframe" style="display:none;"></iframe>
-
-  <script>
-    document.getElementById('download-excel-btn').addEventListener('click', function() {
-      var spinner = document.getElementById('loading-spinner');
-      var iframe = document.getElementById('download-iframe');
-      var button = this;
-      spinner.style.display = 'inline-block';
-      button.disabled = true;
-
-      // Build download URL with query string if present
-      var downloadUrl = "{{ url_for('download_excel') }}";
-      var queryString = "{{ query_string }}";
-      if (queryString) {
-        downloadUrl += '?' + queryString;
+    <style>
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
       }
+    </style>
 
-      // Set iframe src to trigger download
-      iframe.src = downloadUrl;
+    <iframe id="download-iframe" style="display:none;"></iframe>
 
-      // Hide spinner and enable button when iframe loads (download complete)
-      iframe.onload = function() {
-        spinner.style.display = 'none';
-        button.disabled = false;
-      };
+    <script>
+      document.getElementById('download-excel-btn').addEventListener('click', function() {
+        var spinner = document.getElementById('loading-spinner');
+        var iframe = document.getElementById('download-iframe');
+        var button = this;
+        spinner.style.display = 'inline-block';
+        button.disabled = true;
 
-      // Fallback: hide spinner and enable button after 15 seconds in case iframe.onload doesn't fire
-      var fallbackTimeout = setTimeout(function() {
-        spinner.style.display = 'none';
-        button.disabled = false;
-      }, 15000);
+        // Build download URL with query string if present
+        var downloadUrl = "{{ url_for('download_excel') }}";
+        var queryString = "{{ query_string }}";
+        if (queryString) {
+          downloadUrl += '?' + queryString;
+        }
 
-      // Clear fallback if iframe loads before timeout
-      iframe.onload = function() {
-        clearTimeout(fallbackTimeout);
-        spinner.style.display = 'none';
-        button.disabled = false;
-      };
-    });
+        // Set iframe src to trigger download
+        iframe.src = downloadUrl;
 
-    // Add loading spinner for search button on form submit
-    document.getElementById('filter-form').addEventListener('submit', function () {
-      const searchBtn = document.getElementById('searchBtn');
-      const spinner = document.getElementById('searchLoadingSpinner');
-      searchBtn.disabled = true;
-      spinner.classList.remove('d-none');
-    });
-  </script>
-    </div>
-    
+        // Hide spinner and enable button when iframe loads (download complete)
+        iframe.onload = function() {
+          spinner.style.display = 'none';
+          button.disabled = false;
+        };
+
+        // Fallback: hide spinner and enable button after 15 seconds in case iframe.onload doesn't fire
+        var fallbackTimeout = setTimeout(function() {
+          spinner.style.display = 'none';
+          button.disabled = false;
+        }, 15000);
+
+        // Clear fallback if iframe loads before timeout
+        iframe.onload = function() {
+          clearTimeout(fallbackTimeout);
+          spinner.style.display = 'none';
+          button.disabled = false;
+        };
+      });
+
+      // Add validation and loading spinner for search button on form submit
+      document.getElementById('filter-form').addEventListener('submit', function (e) {
+        const fromDate = document.querySelector('input[name="from_date"]').value;
+        const toDate = document.querySelector('input[name="to_date"]').value;
+        const searchInput = document.querySelector('input[name="search"]').value;
+
+        // If search is used, but from_date or to_date is missing
+        if (searchInput.trim() !== "" && (fromDate === "" || toDate === "")) {
+          e.preventDefault();
+          alert("Please select both From and To dates before using the search box.");
+          return false;
+        }
+
+        // Show spinner if search is being used
+        if (searchInput.trim() !== "") {
+          const searchBtn = document.getElementById('searchBtn');
+          const spinner = document.getElementById('searchLoadingSpinner');
+          searchBtn.disabled = true;
+          spinner.classList.remove('d-none');
+        }
+      });
+    </script>
+  </div>
+
+  <!-- Data table -->
   <div id="table-container" class="table-responsive" style="max-height: 70vh; overflow: auto;">
     <table id="data-table" class="table table-bordered table-striped table-hover align-middle w-auto">
       <thead class="table-dark">
@@ -126,13 +169,11 @@
           <th>
             {% if 'page' in col|lower or 'week' in col|lower or 'month' in col|lower or 'division' in col|lower %}
               {% if 'page' in col|lower %}
-                <!-- Numeric input for pages -->
                 <input type="number" name="{{ col }}" class="form-control form-control-sm"
                   placeholder="e.g. 5"
                   value="{{ request.args.get(col, '') }}"
                   onkeypress="if(event.key === 'Enter') document.getElementById('filter-form').submit();">
               {% else %}
-                <!-- Dropdown for week, month, division -->
                 <select name="{{ col }}" onchange="document.getElementById('filter-form').submit()" class="form-select form-select-sm">
                   <option value="">All</option>
                   {% for val in unique_values[col] %}
@@ -241,7 +282,6 @@
     overflow: auto;
     z-index: 9999;
   }
-  
 </style>
 
 <!-- Fullscreen Script -->

@@ -597,6 +597,7 @@ def api_upload_excel():
 from flask import send_file
 import io
 
+from datetime import datetime, timedelta
 
 @app.route('/view')
 def view():
@@ -604,7 +605,6 @@ def view():
     per_page = 100
     offset = (page - 1) * per_page
 
-    # Define valid filterable columns
     columns = [
         "document_name", "user_name", "hostname", "pages_printed", "date",
         "month", "week", "printer_model", "division", "location"
@@ -613,32 +613,47 @@ def view():
     filters = []
     params = {}
 
-    # Handle global search across all columns
     search_term = request.args.get("search", "").strip()
-    date_search = request.args.get("date_search", "").strip()
+    from_date = request.args.get("from_date", "").strip()
+    to_date = request.args.get("to_date", "").strip()
+
+    # Handle global search across all columns
     if search_term:
         search_clauses = [f"{col} LIKE :search" for col in columns]
         filters.append("(" + " OR ".join(search_clauses) + ")")
         params["search"] = f"%{search_term}%"
 
-    if date_search:
-        # Search date column for exact date match
-        filters.append("CAST(date AS DATE) = :date_search")
-        params["date_search"] = date_search
+    # Handle date range filtering
+    # If both dates are provided, filter between them
+    if from_date and to_date:
+        filters.append("CAST(date AS DATE) BETWEEN :from_date AND :to_date")
+        params["from_date"] = from_date
+        params["to_date"] = to_date
+    elif from_date:
+        filters.append("CAST(date AS DATE) >= :from_date")
+        params["from_date"] = from_date
+    elif to_date:
+        filters.append("CAST(date AS DATE) <= :to_date")
+        params["to_date"] = to_date
+    else:
+        # No date filters provided, default to last month
+        # Calculate last month date range
+        today = datetime.today()
+        first_day_this_month = today.replace(day=1)
+        last_month_end = first_day_this_month - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        filters.append("CAST(date AS DATE) BETWEEN :from_date AND :to_date")
+        params["from_date"] = last_month_start.strftime('%Y-%m-%d')
+        params["to_date"] = last_month_end.strftime('%Y-%m-%d')
 
-    # Handle column-specific filters
+    # Handle other column-specific filters
     for col in columns:
+        if col in ('date',):
+            continue  # date handled above
         val = request.args.get(col)
         if val:
-            if col == 'date':
-                # Partial match with LIKE for dates to catch substrings like '2025-06-18'
-                filters.append(f"{col} LIKE :{col}")
-                params[col] = f"%{val}%"
-            else:
-                # Exact match for other columns
-                filters.append(f"{col} = :{col}")
-                params[col] = val
-
+            filters.append(f"{col} = :{col}")
+            params[col] = val
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
@@ -647,17 +662,14 @@ def view():
 
         unique_values = {}
         with engine.connect() as conn:
-            # Get unique values for filter dropdowns
             for col in columns:
                 result = conn.execute(text(f"SELECT DISTINCT {col} FROM printer_logs ORDER BY {col}"))
                 unique_values[col] = [str(row[0]) for row in result if row[0] is not None]
 
-            # Get total row count for pagination
             count_query = f"SELECT COUNT(*) FROM printer_logs {where_clause}"
             total_rows = conn.execute(text(count_query), params).scalar()
             total_pages = (total_rows + per_page - 1) // per_page
 
-            # Fetch paginated data
             query = f"""
                 SELECT document_name, user_name, hostname, pages_printed, date, month,
                        week, printer_model, division, location
@@ -687,6 +699,7 @@ def view():
         unique_values=unique_values,
         filters_applied=bool(params)
     )
+
 
 @app.route('/download')
 def download_excel():
