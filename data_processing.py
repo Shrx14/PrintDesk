@@ -60,8 +60,21 @@ def insert_data_to_db(df, uploaded_by='system', upload_date=None):
                 'uploaded_by': uploaded_by
             })
 
-        with engine.begin() as conn:
-            conn.execute(text(insert_sql), batch_params)
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(insert_sql), batch_params)
+        except Exception as e:
+            logging.error(f"Error inserting batch starting at index {idx}: {e}")
+            logging.info("Attempting to reconnect and retry batch insert...")
+            engine.dispose()
+            engine = get_sqlalchemy_engine()
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(insert_sql), batch_params)
+                logging.info(f"Batch starting at index {idx} inserted successfully after reconnect.")
+            except Exception as retry_e:
+                logging.error(f"Retry failed for batch starting at index {idx}: {retry_e}")
+                raise retry_e
         idx = batch_end
 
     engine.dispose()
