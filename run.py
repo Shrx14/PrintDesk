@@ -169,11 +169,13 @@ def create_roles_table_if_not_exists():
         from flask import flash
         flash(f"Error creating roles table: {e}")
 
+create_roles_table_if_not_exists()
+
 import time
 
 def insert_data_to_db(df):
-    import os
-    from datetime import datetime
+    import datetime
+    from sqlalchemy import text
     insert_sql = """
     INSERT INTO printer_logs (
         document_name, user_name, hostname, pages_printed, date, month, week, printer_model, division, location, upload_date, uploaded_by
@@ -181,51 +183,11 @@ def insert_data_to_db(df):
         :document_name, :user_name, :hostname, :pages_printed, :date, :month, :week, :printer_model, :division, :location, :upload_date, :uploaded_by
     )
     """
-    duplicates = []
     logging.info(f"Starting insert_data_to_db with {len(df)} rows")
     engine = get_sqlalchemy_engine()
     batch_size = 1000
-    batch_params = []
-    # Filter out rows with missing or empty hostname
-    df_filtered = df[df['hostname'].notnull() & (df['hostname'] != '')]
-
-    # Prepare a set of existing keys to check duplicates in bulk
-    existing_keys = set()
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT user_name, document_name, hostname, pages_printed, date, month, week, printer_model, division, location FROM printer_logs"))
-            rows = result.fetchall()
-            for r in rows:
-                # r contains all columns in unique constraint
-                existing_keys.add((
-                    r[0],  # user_name
-                    r[1],  # document_name
-                    r[2],  # hostname
-                    r[3],  # pages_printed
-                    r[4],  # date
-                    r[5],  # month
-                    r[6],  # week
-                    r[7],  # printer_model
-                    r[8],  # division
-                    r[9],  # location
-                ))
-    except Exception as e:
-        logging.error(f"Error fetching existing keys: {e}")
-
-    inserted_count = 0
-    last_inserted_idx = -1  # Track last inserted row index for resume on failure
-
-    def execute_with_retry(func, max_retries=5, delay=10):
-        for attempt in range(max_retries):
-            try:
-                return func()
-            except Exception as e:
-                if '08S01' in str(e) or 'Communication link failure' in str(e):
-                    logging.warning(f"Transient connection error on attempt {attempt+1}/{max_retries}: {e}")
-                    time.sleep(delay * (2 ** attempt))  # Exponential backoff with longer base delay
-                else:
-                    raise
-        raise Exception("Max retries exceeded for database operation due to connection issues.")
+    idx = 0
+    total_rows = len(df)
 
     def truncate_string(s, max_length):
         if s is None:
@@ -236,13 +198,11 @@ def insert_data_to_db(df):
             return s[:max_length]
         return s
 
-    idx = 0
-    total_rows = len(df_filtered)
     while idx < total_rows:
         batch_params = []
         batch_end = min(idx + batch_size, total_rows)
         for i in range(idx, batch_end):
-            row = df_filtered.iloc[i]
+            row = df.iloc[i]
             user_name = truncate_string(row['user name'], 255)
             document_name = truncate_string(row['document name'], 255)
             hostname = truncate_string(row['hostname'], 255)
@@ -254,136 +214,28 @@ def insert_data_to_db(df):
             division = truncate_string(row.get('division', None), 255)
             location = truncate_string(row.get('location', None), 255)
 
-            # Calculate original Excel row number (considering header rows)
-            original_row_num = row.name + 2  # +2 to account for header row and 0-based index
+            batch_params.append({
+                'document_name': document_name,
+                'user_name': user_name,
+                'hostname': hostname,
+                'pages_printed': pages_printed,
+                'date': date_val,
+                'month': month,
+                'week': week,
+                'printer_model': printer_model,
+                'division': division,
+                'location': location,
+                'upload_date': datetime.datetime.now(),
+                'uploaded_by': 'system'  # or get from session/user context
+            })
 
-            # Log lengths of string fields to detect truncation issues
-            logging.debug(f"Row {i} (Excel row {original_row_num}) lengths: user_name={len(str(user_name))}, document_name={len(str(document_name))}, hostname={len(str(hostname))}, month={len(str(month))}, week={len(str(week))}, printer_model={len(str(printer_model))}, division={len(str(division))}, location={len(str(location))}")
+        with engine.begin() as conn:
+            conn.execute(text(insert_sql), batch_params)
+        idx = batch_end
 
-            key = (
-                user_name,
-                document_name,
-                hostname,
-                pages_printed,
-                date_val,
-                month,
-                week,
-                printer_model,
-                division,
-                location,
-            )
-            if key in existing_keys:
-                duplicates.append({
-                    'user_name': user_name,
-                    'document_name': document_name,
-                    'hostname': hostname,
-                    'pages_printed': pages_printed,
-                    'date': date_val,
-                    'month': month,
-                    'week': week,
-                    'printer_model': printer_model,
-                    'division': division,
-                    'location': location
-                })
-                logging.info(f"Row {i} (Excel row {original_row_num}): Duplicate found, skipping insert.")
-            else:
-                batch_params.append({
-                    'document_name': document_name,
-                    'user_name': user_name,
-                    'hostname': hostname,
-                    'pages_printed': pages_printed,
-                    'date': date_val,
-                    'month': month,
-                    'week': week,
-                    'printer_model': printer_model,
-                    'division': division,
-                    'location': location
-                })
-
-        try:
-            def insert_batch():
-                with engine.begin() as conn:
-                    conn.execute(text(insert_sql), batch_params)
-            execute_with_retry(insert_batch)
-            inserted_count += len(batch_params)
-            last_inserted_idx = batch_end - 1
-            idx = batch_end
-        except Exception as e:
-            logging.error(f"Batch insert error: {e}. Falling back to row-by-row insert.")
-            # Row-by-row insert with resume support
-            for i in range(idx, total_rows):
-                row = df_filtered.iloc[i]
-                user_name = truncate_string(row['user name'], 255)
-                document_name = truncate_string(row['document name'], 255)
-                hostname = truncate_string(row['hostname'], 255)
-                pages_printed = int(row['pages printed'])
-                date_val = row['date'] if pd.notnull(row['date']) else None
-                month = truncate_string(row['month'], 50)
-                week = truncate_string(row['week'], 50)
-                printer_model = truncate_string(row.get('printer_model', None), 255)
-                division = truncate_string(row.get('division', None), 255)
-                location = truncate_string(row.get('location', None), 255)
-
-                original_row_num = row.name + 2
-
-                key = (
-                    user_name,
-                    document_name,
-                    hostname,
-                    pages_printed,
-                    date_val,
-                    month,
-                    week,
-                    printer_model,
-                    division,
-                    location,
-                )
-                if key in existing_keys:
-                    duplicates.append({
-                        'user_name': user_name,
-                        'document_name': document_name,
-                        'hostname': hostname,
-                        'pages_printed': pages_printed,
-                        'date': date_val,
-                        'month': month,
-                        'week': week,
-                        'printer_model': printer_model,
-                        'division': division,
-                        'location': location
-                    })
-                    logging.info(f"Row {i} (Excel row {original_row_num}): Duplicate found, skipping insert.")
-                    continue
-
-                try:
-                    def insert_row():
-                        with engine.begin() as conn:
-                            conn.execute(text(insert_sql), {
-                                'document_name': document_name,
-                                'user_name': user_name,
-                                'hostname': hostname,
-                                'pages_printed': pages_printed,
-                                'date': date_val,
-                                'month': month,
-                                'week': week,
-                                'printer_model': printer_model,
-                                'division': division,
-                                'location': location
-                            })
-                    execute_with_retry(insert_row)
-                    inserted_count += 1
-                    last_inserted_idx = i
-                except Exception as ex:
-                    if 'unique_all_columns' in str(ex):
-                        logging.info(f"Row-by-row insert: Duplicate detected, skipping.")
-                    elif '22001' in str(ex) or 'String or binary data would be truncated' in str(ex):
-                        logging.warning(f"Row-by-row insert: Data too long, skipping row {i}. Data: {(document_name, user_name, hostname, pages_printed, date_val, month, week, printer_model, division, location)}")
-                    else:
-                        logging.error(f"Row-by-row insert error: {ex}")
-                        raise ex
-            break
-
-    logging.info(f"Inserted {inserted_count} rows into 'printer_logs' table successfully. {len(duplicates)} duplicates skipped.")
-    return duplicates
+    engine.dispose()
+    logging.info(f"Inserted {total_rows} rows into 'printer_logs' table successfully.")
+    return total_rows
 
 @app.route('/')
 def home():
@@ -577,21 +429,29 @@ def upload():
             logging.info(f"Derived 'month' column sample data:\\n{df['month'].head()}")
             logging.info(f"Derived 'week' column sample data:\\n{df['week'].head()}")
 
+            # Query max date from printer_logs
+            engine = get_sqlalchemy_engine()
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT MAX(date) FROM printer_logs"))
+                max_date_in_db = result.scalar()
+            engine.dispose()
+
+            if max_date_in_db is not None:
+                min_date_in_upload = df['date'].min()
+                if min_date_in_upload <= max_date_in_db:
+                    flash(f"Please upload data from after {max_date_in_db}. Current file contains duplicate data.")
+                    return redirect(url_for('upload'))
+
             # Insert data into database in chunks of 5000 rows
             try:
-                duplicates = []
                 chunk_size = 5000
                 for start in range(0, len(df), chunk_size):
                     chunk = df.iloc[start:start+chunk_size]
-                    chunk_duplicates = insert_data_to_db(chunk)
-                    duplicates.extend(chunk_duplicates)
+                    insert_data_to_db(chunk)
             except Exception as e:
                 flash(f"Error inserting data into database: {e}")
                 logging.error(f"Error inserting data into database: {e}")
                 return redirect(url_for('upload'))
-
-            if duplicates and len(duplicates) > 0:
-                flash(f"{len(duplicates)} duplicate entries skipped.")
 
             flash('File uploaded and data saved to database successfully!')
             return redirect(url_for('view'))
