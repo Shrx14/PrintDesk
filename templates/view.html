@@ -54,8 +54,6 @@
   </div>
 </div>
 
-
-
   <!-- Global search -->
   <div class="mb-3 d-flex align-items-center" style="max-width: 400px;">
     <input
@@ -71,6 +69,7 @@
       <span id="searchLoadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
     </button>
   </div>
+  <div id="flash-container"></div>
 
   <div class="d-flex justify-content-end mb-2">
     {% set query_string = request.query_string.decode('utf-8') %}
@@ -128,27 +127,50 @@
       });
 
       // Add validation and loading spinner for search button on form submit
-      document.getElementById('filter-form').addEventListener('submit', function (e) {
-        const fromDate = document.querySelector('input[name="from_date"]').value;
-        const toDate = document.querySelector('input[name="to_date"]').value;
-        const searchInput = document.querySelector('input[name="search"]').value;
+  document.getElementById('filter-form').addEventListener('submit', function (e) {
+    const fromDate = document.querySelector('input[name="from_date"]').value;
+    const toDate = document.querySelector('input[name="to_date"]').value;
+    const searchInput = document.querySelector('input[name="search"]').value;
+    const flashContainer = document.getElementById('flash-container');
 
-        // If search is used, but from_date or to_date is missing
-        if (searchInput.trim() !== "" && (fromDate === "" || toDate === "")) {
-          e.preventDefault();
-          alert("Please select both From and To dates before using the search box.");
-          return false;
-        }
+    // If from_date is selected but to_date is missing
+    if (fromDate !== "" && toDate === "") {
+      e.preventDefault();
+      flashContainer.innerHTML = `
+        <div class="alert alert-warning" role="alert">
+          Select the To Date or the data will be displayed till the current date.
+        </div>
+      `;
+      return false;
+    }
 
-        // Show spinner if search is being used
-        if (searchInput.trim() !== "") {
-          const searchBtn = document.getElementById('searchBtn');
-          const spinner = document.getElementById('searchLoadingSpinner');
-          searchBtn.disabled = true;
-          spinner.classList.remove('d-none');
-        }
-      });
-    </script>
+    // If to_date is selected but from_date is missing
+    if (toDate !== "" && fromDate === "") {
+      e.preventDefault();
+      flashContainer.innerHTML = `
+        <div class="alert alert-warning" role="alert">
+          Please select the 'From Date'; otherwise, data will be shown from the start date of the data.
+        </div>
+      `;
+      return false;
+    }
+
+    // If search is used, but from_date or to_date is missing
+    if (searchInput.trim() !== "" && (fromDate === "" || toDate === "")) {
+      e.preventDefault();
+      alert("Please select both From and To dates before using the search box.");
+      return false;
+    }
+
+    // Show spinner if search is being used
+    if (searchInput.trim() !== "") {
+      const searchBtn = document.getElementById('searchBtn');
+      const spinner = document.getElementById('searchLoadingSpinner');
+      searchBtn.disabled = true;
+      spinner.classList.remove('d-none');
+    }
+  });
+</script>
   </div>
 
   <!-- Data table -->
