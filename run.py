@@ -822,13 +822,6 @@ def dashboard():
         logging.info(f"Filters => time: {time_filter}, date: {date_input}, month: {month_input}, year: {year_input}, week: {week_select}, location: {location_filter}, division: {division_filter}")
 
         # Set default year_input as the year of the last entry in printer_logs if not provided
-        if not year_input:
-            max_year_query = "SELECT MAX(YEAR(date)) AS max_year FROM printer_logs"
-            with engine.connect() as conn:
-                result = conn.execute(max_year_query)
-                max_year = result.scalar()
-            if max_year:
-                year_input = str(max_year)
 
         # Apply location filter
         if location_filter and location_filter != 'all':
