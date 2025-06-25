@@ -1270,8 +1270,24 @@ def dashboard_visualize():
 
         # 4. Last 3 Months Pages Printed (10 Least Used Printers)
         last_3_months = pd.Timestamp.now() - pd.DateOffset(months=3)
-        df_last_3_months = df[df['date'] >= last_3_months]
-        least_printers_3m = df_last_3_months.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
+
+        # Separate query for graph 4 data filtered only by division and last 3 months, ignoring other filters
+        graph4_query = """
+            SELECT printer_model, SUM(pages_printed) AS pages_printed
+            FROM printer_logs
+            WHERE date >= :last_3_months
+            AND hostname NOT IN (SELECT hostname FROM printer_exceptions)
+        """
+        params_graph4 = {'last_3_months': last_3_months}
+
+        if division_filter and division_filter != 'all':
+            graph4_query += " AND division = :division_filter"
+            params_graph4['division_filter'] = division_filter
+
+        graph4_query += " GROUP BY printer_model ORDER BY pages_printed ASC"
+
+        df_graph4 = pd.read_sql_query(text(graph4_query), engine, params=params_graph4)
+        least_printers_3m = df_graph4.set_index('printer_model')['pages_printed'].head(10)
 
         # Helper function to plot and encode to base64
         def plot_to_base64(fig):
