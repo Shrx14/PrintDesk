@@ -3,19 +3,35 @@
 {% block title %}Admin Management{% endblock %}
 
 {% block content %}
-<h2 class="mb-4 text-center">👑 Admin User Management</h2>
+<div style="position: fixed; top: 0; left: 0; width: 100%; background-color: #1e1e1e; padding: 1rem 0; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.7);">
+  <h2 style="margin: 0; color: #eceff1; text-align: center; font-weight: 600;">👑 Admin User Management</h2>
+</div>
 
-<div class="container">
-  <!-- Add New User Form -->
-  <div class="card mb-4 shadow-sm">
-    <div class="card-header bg-primary text-white">Add New User</div>
-    <div class="card-body">
+<div style="padding-top: 4rem;"></div>
+
+<div class="container d-flex" style="gap: 2rem; max-width: 900px; overflow-x: hidden;">
+
+  <!-- Left Panel: User Selection and Add New User -->
+  <div class="user-selection-panel" style="flex: 1; background-color: #263238; border-radius: 16px; padding: 1.5rem; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); border: 1.5px solid #37474f; display: flex; flex-direction: column; gap: 2rem;">
+    <div>
+      <div class="card-header bg-primary text-white mb-3" style="border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: 1.25rem; user-select: none;">Users</div>
+      <ul id="userList" class="list-group-flush" style="margin-bottom: 1.5rem; padding-left: 0;">
+        <!-- Example static users, replace with dynamic data -->
+        <li class="list-group-item" data-username="alice">alice</li>
+        <li class="list-group-item" data-username="bob">bob</li>
+        <li class="list-group-item" data-username="charlie">charlie</li>
+        <!-- Add more users dynamically -->
+      </ul>
+    </div>
+
+    <div>
+      <div class="card-header bg-primary text-white mb-2" style="border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: 1.25rem; user-select: none;">Add New User</div>
       <form id="addUserForm" class="row g-3 align-items-center">
-        <div class="col-md-4">
+        <div class="col-12 mb-2">
           <label for="newUsername" class="form-label">Username</label>
           <input type="text" id="newUsername" class="form-control" placeholder="Enter username" required>
         </div>
-        <div class="col-md-6">
+        <div class="col-12 mb-3">
           <label class="form-label">Permissions</label>
           <div class="form-check form-check-inline ms-3">
             <input class="form-check-input" type="checkbox" id="permView" value="view">
@@ -30,113 +46,142 @@
             <label class="form-check-label" for="permAdmin">Admin</label>
           </div>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
+        <div class="col-12 d-flex justify-content-center">
           <button type="submit" class="btn btn-success w-100">Add User</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Existing Users Table -->
-  <div class="card shadow-sm">
-    <div class="card-header bg-secondary text-white">Manage Existing Users</div>
-    <div class="card-body">
-      <form id="userPermissionsForm">
-        <table class="table table-striped align-middle">
-          <thead>
-            <tr>
-              <th>Username</th>
-              <th class="text-center">View</th>
-              <th class="text-center">Upload</th>
-              <th class="text-center">Admin</th>
-            </tr>
-          </thead>
-          <tbody id="usersTableBody">
-            <!-- Example static users, replace with dynamic data -->
-            <tr>
-              <td>alice</td>
-              <td class="text-center">
-                <input type="checkbox" name="alice_view" checked>
-              </td>
-              <td class="text-center">
-                <input type="checkbox" name="alice_upload">
-              </td>
-              <td class="text-center">
-                <input type="checkbox" name="alice_admin">
-              </td>
-            </tr>
-            <tr>
-              <td>bob</td>
-              <td class="text-center">
-                <input type="checkbox" name="bob_view" checked>
-              </td>
-              <td class="text-center">
-                <input type="checkbox" name="bob_upload" checked>
-              </td>
-              <td class="text-center">
-                <input type="checkbox" name="bob_admin">
-              </td>
-            </tr>
-            <tr>
-              <td>charlie</td>
-              <td class="text-center">
-                <input type="checkbox" name="charlie_view">
-              </td>
-              <td class="text-center">
-                <input type="checkbox" name="charlie_upload">
-              </td>
-              <td class="text-center">
-                <input type="checkbox" name="charlie_admin" checked>
-              </td>
-            </tr>
-            <!-- Add more rows dynamically -->
-          </tbody>
-        </table>
-        <div class="text-end">
-          <button type="submit" class="btn btn-primary">Save Changes</button>
-        </div>
-      </form>
-    </div>
+  <!-- Right Panel: Manage Selected User -->
+  <div class="manage-user-panel" style="flex: 1; background-color: #263238; border-radius: 16px; padding: 1.5rem; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); border: 1.5px solid #37474f;">
+    <div class="card-header bg-secondary text-white mb-3" style="border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: 1.25rem; user-select: none;">Manage User Permissions</div>
+    <form id="userPermissionsForm">
+      <div class="mb-3">
+        <label for="selectedUsername" class="form-label">Selected User</label>
+        <input type="text" id="selectedUsername" class="form-control" readonly>
+      </div>
+      <div class="form-check form-check-inline ms-3">
+        <input class="form-check-input" type="checkbox" id="manageView" value="view">
+        <label class="form-check-label" for="manageView">View</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" id="manageUpload" value="upload">
+        <label class="form-check-label" for="manageUpload">Upload</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" id="manageAdmin" value="admin">
+        <label class="form-check-label" for="manageAdmin">Admin</label>
+      </div>
+      <div class="mt-4 text-end">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
   </div>
+
 </div>
 
 <script>
-  // Example JS to handle adding a user to the table (frontend only)
+  // Sample user data - in real app, this should come from backend
+  const users = {
+    alice: { view: true, upload: false, admin: false },
+    bob: { view: true, upload: true, admin: false },
+    charlie: { view: false, upload: false, admin: true }
+  };
+
+  const userList = document.getElementById('userList');
+  const selectedUsernameInput = document.getElementById('selectedUsername');
+  const manageView = document.getElementById('manageView');
+  const manageUpload = document.getElementById('manageUpload');
+  const manageAdmin = document.getElementById('manageAdmin');
+
+  let selectedUser = null;
+
+  // Function to clear selection highlight
+  function clearSelection() {
+    const items = userList.querySelectorAll('li');
+    items.forEach(item => item.classList.remove('active'));
+  }
+
+  // Function to update manage user form based on selected user
+  function updateManageUserForm(username) {
+    selectedUsernameInput.value = username;
+    const perms = users[username];
+    manageView.checked = perms.view;
+    manageUpload.checked = perms.upload;
+    manageAdmin.checked = perms.admin;
+  }
+
+  // Handle user selection from list
+  userList.addEventListener('click', (e) => {
+    if (e.target && e.target.tagName === 'LI') {
+      const username = e.target.getAttribute('data-username');
+      if (!username) return;
+      selectedUser = username;
+      clearSelection();
+      e.target.classList.add('active');
+      updateManageUserForm(username);
+    }
+  });
+
+  // Initialize with first user selected
+  const firstUser = userList.querySelector('li');
+  if (firstUser) {
+    firstUser.classList.add('active');
+    selectedUser = firstUser.getAttribute('data-username');
+    updateManageUserForm(selectedUser);
+  }
+
+  // Handle add new user form submission
   document.getElementById('addUserForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const username = document.getElementById('newUsername').value.trim();
     if (!username) return alert('Please enter a username.');
 
-    const view = document.getElementById('permView').checked;
-    const upload = document.getElementById('permUpload').checked;
-    const admin = document.getElementById('permAdmin').checked;
-
-    // Prevent duplicate usernames (basic check)
-    const existingUser = Array.from(document.querySelectorAll('#usersTableBody tr td:first-child'))
-                              .some(td => td.textContent === username);
-    if (existingUser) {
+    if (users.hasOwnProperty(username)) {
       alert('User already exists.');
       return;
     }
 
-    const tbody = document.getElementById('usersTableBody');
-    const tr = document.createElement('tr');
+    const view = document.getElementById('permView').checked;
+    const upload = document.getElementById('permUpload').checked;
+    const admin = document.getElementById('permAdmin').checked;
 
-    tr.innerHTML = `
-      <td>${username}</td>
-      <td class="text-center"><input type="checkbox" name="${username}_view" ${view ? 'checked' : ''}></td>
-      <td class="text-center"><input type="checkbox" name="${username}_upload" ${upload ? 'checked' : ''}></td>
-      <td class="text-center"><input type="checkbox" name="${username}_admin" ${admin ? 'checked' : ''}></td>
-    `;
+    // Add user to data
+    users[username] = { view, upload, admin };
 
-    tbody.appendChild(tr);
+    // Add user to list
+    const li = document.createElement('li');
+    li.className = 'list-group-item';
+    li.setAttribute('data-username', username);
+    li.textContent = username;
+    userList.appendChild(li);
 
-    // Clear the add user form
-    document.getElementById('addUserForm').reset();
+    // Clear form
+    this.reset();
+
+    // Select the new user
+    clearSelection();
+    li.classList.add('active');
+    selectedUser = username;
+    updateManageUserForm(username);
   });
 
-  // You can add form submission logic here to send data to backend...
+  // Handle manage user permissions form submission
+  document.getElementById('userPermissionsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (!selectedUser) {
+      alert('No user selected.');
+      return;
+    }
+    users[selectedUser].view = manageView.checked;
+    users[selectedUser].upload = manageUpload.checked;
+    users[selectedUser].admin = manageAdmin.checked;
+    alert('Permissions updated for ' + selectedUser);
+    // Here you can add code to send updated permissions to backend
+  });
 </script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
 
@@ -150,6 +195,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  overflow-x: hidden;
 }
 
 .container {
@@ -157,9 +203,11 @@ body {
   border-radius: 16px;
   max-width: 900px;
   width: 100%;
-  padding: 2.5rem 3rem;
+  padding: 2.5rem 1rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
   box-sizing: border-box;
+  display: flex;
+  gap: 2rem;
 }
 
 h2.mb-4 {
@@ -309,7 +357,7 @@ button.btn-outline-info:hover {
 
 .list-group-item {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 0.65rem 0.8rem;
   color: #cfd8dccc;
   font-weight: 500;
@@ -318,7 +366,8 @@ button.btn-outline-info:hover {
   background-color: #37474f;
   margin-bottom: 0.35rem;
   transition: background-color 0.2s ease;
-  cursor: default;
+  cursor: pointer;
+  user-select: none;
 }
 
 .list-group-item:hover {
@@ -326,7 +375,20 @@ button.btn-outline-info:hover {
   color: #eceff1;
 }
 
+.list-group-item.active {
+  background-color: #0288d1;
+  color: #eceff1;
+  font-weight: 700;
+}
+
 @media (max-width: 720px) {
+  .container {
+    flex-direction: column;
+  }
+  .user-selection-panel,
+  .manage-user-panel {
+    max-height: none;
+  }
   form.row.g-3 {
     flex-direction: column;
   }
@@ -337,8 +399,6 @@ button.btn-outline-info:hover {
     padding: 1.4rem 1.6rem;
   }
 }
-
 </style>
-
 
 {% endblock %}
