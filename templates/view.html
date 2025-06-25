@@ -89,88 +89,43 @@
     <iframe id="download-iframe" style="display:none;"></iframe>
 
     <script>
-      document.getElementById('download-excel-btn').addEventListener('click', function() {
-        var spinner = document.getElementById('loading-spinner');
-        var iframe = document.getElementById('download-iframe');
-        var button = this;
-        spinner.style.display = 'inline-block';
-        button.disabled = true;
+document.getElementById('download-excel-btn').addEventListener('click', function() {
+  var spinner = document.getElementById('loading-spinner');
+  var iframe = document.getElementById('download-iframe');
+  var button = this;
+  spinner.style.display = 'inline-block';
+  button.disabled = true;
 
-        // Build download URL with query string if present
-        var downloadUrl = "{{ url_for('routes.download_excel') }}";
-        var queryString = "{{ query_string }}";
-        if (queryString) {
-          downloadUrl += '?' + queryString;
-        }
+  // Dynamically build query string from filter form
+  var form = document.getElementById('filter-form');
+  var formData = new FormData(form);
+  var params = new URLSearchParams();
 
-        // Set iframe src to trigger download
-        iframe.src = downloadUrl;
-
-        // Hide spinner and enable button when iframe loads (download complete)
-        iframe.onload = function() {
-          spinner.style.display = 'none';
-          button.disabled = false;
-        };
-
-        // Fallback: hide spinner and enable button after 15 seconds in case iframe.onload doesn't fire
-        var fallbackTimeout = setTimeout(function() {
-          spinner.style.display = 'none';
-          button.disabled = false;
-        }, 15000);
-
-        // Clear fallback if iframe loads before timeout
-        iframe.onload = function() {
-          clearTimeout(fallbackTimeout);
-          spinner.style.display = 'none';
-          button.disabled = false;
-        };
-      });
-
-      // Add validation and loading spinner for search button on form submit
-  document.getElementById('filter-form').addEventListener('submit', function (e) {
-    const fromDate = document.querySelector('input[name="from_date"]').value;
-    const toDate = document.querySelector('input[name="to_date"]').value;
-    const searchInput = document.querySelector('input[name="search"]').value;
-    const flashContainer = document.getElementById('flash-container');
-
-    // If from_date is selected but to_date is missing
-    if (fromDate !== "" && toDate === "") {
-      e.preventDefault();
-      flashContainer.innerHTML = `
-        <div class="alert alert-warning" role="alert">
-          Select the To Date or the data will be displayed till the current date.
-        </div>
-      `;
-      return false;
+  for (var pair of formData.entries()) {
+    if (pair[1].trim() !== "") {
+      params.append(pair[0], pair[1]);
     }
+  }
 
-    // If to_date is selected but from_date is missing
-    if (toDate !== "" && fromDate === "") {
-      e.preventDefault();
-      flashContainer.innerHTML = `
-        <div class="alert alert-warning" role="alert">
-          Please select the 'From Date'; otherwise, data will be shown from the start date of the data.
-        </div>
-      `;
-      return false;
-    }
+  var downloadUrl = "{{ url_for('routes.download_excel') }}?" + params.toString();
 
-    // If search is used, but from_date or to_date is missing
-    if (searchInput.trim() !== "" && (fromDate === "" || toDate === "")) {
-      e.preventDefault();
-      alert("Please select both From and To dates before using the search box.");
-      return false;
-    }
+  // Trigger file download
+  iframe.src = downloadUrl;
 
-    // Show spinner if search is being used
-    if (searchInput.trim() !== "") {
-      const searchBtn = document.getElementById('searchBtn');
-      const spinner = document.getElementById('searchLoadingSpinner');
-      searchBtn.disabled = true;
-      spinner.classList.remove('d-none');
-    }
-  });
+  // Hide spinner when done
+  var fallbackTimeout = setTimeout(function() {
+    spinner.style.display = 'none';
+    button.disabled = false;
+  }, 15000);
+
+  iframe.onload = function() {
+    clearTimeout(fallbackTimeout);
+    spinner.style.display = 'none';
+    button.disabled = false;
+  };
+});
 </script>
+
   </div>
 
   <!-- Data table -->
