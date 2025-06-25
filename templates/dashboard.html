@@ -289,12 +289,15 @@
     const timeSelect = document.getElementById('time_filter');
     const dateInput = document.getElementById('date_input');
     const flashContainer = document.getElementById('flash-container');
+    const yearInput = document.getElementById('year_input');
 
     applyBtn.addEventListener('click', (e) => {
-      // Only block if Daily is selected and no date entered
       if (timeSelect.value === 'daily' && !dateInput.value) {
         e.preventDefault();  // prevent the form from submitting
         showFlash('⚠️ Please select a date to apply the daily filter.');
+      } else if (timeSelect.value === 'yearly' && !yearInput.value) {
+        e.preventDefault();  // prevent the form from submitting
+        showFlash('⚠️ Please select a year to apply the yearly filter.');
       }
     });
 

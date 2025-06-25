@@ -778,6 +778,15 @@ def dashboard():
 
         logging.info(f"Filters => time: {time_filter}, date: {date_input}, month: {month_input}, year: {year_input}, week: {week_select}, location: {location_filter}, division: {division_filter}")
 
+        # Set default year_input as the year of the last entry in printer_logs if not provided
+        if not year_input:
+            max_year_query = "SELECT MAX(YEAR(date)) AS max_year FROM printer_logs"
+            with engine.connect() as conn:
+                result = conn.execute(max_year_query)
+                max_year = result.scalar()
+            if max_year:
+                year_input = str(max_year)
+
         # Apply location filter
         if location_filter and location_filter != 'all':
             df = df[df['location'] == location_filter]
@@ -1192,8 +1201,10 @@ def dashboard_visualize():
         # 1. Pages Printed Over Time (daily or monthly depending on filter)
         if time_filter in ['daily', 'weekly']:
             df_time = df.groupby(df['date'].dt.date)['pages_printed'].sum()
-        else:
+        elif time_filter == 'monthly':
             df_time = df.groupby('month')['pages_printed'].sum()
+        else:  # yearly
+            df_time = df.groupby(df['date'].dt.year)['pages_printed'].sum()
 
         # 2. Pages Printed by Location (10 Least Used Printers)
         least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
@@ -1220,7 +1231,7 @@ def dashboard_visualize():
         if time_filter in ['daily', 'weekly']:
             df_time.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Date')
-        else:
+        elif time_filter in ['monthly']:
             # Convert month strings like "May'25" to datetime for sorting
             def parse_month_str(m):
                 try:
@@ -1232,6 +1243,18 @@ def dashboard_visualize():
             df_time = df_time.sort_index()
             df_time.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Month')
+        else:
+            def parse_month_str(m):
+                try:
+                    dt = pd.to_datetime(m, format="%b'%y")
+                    return dt.year
+                except Exception:
+                    return pd.NaT
+            df_time.index = df_time.index.map(parse_month_str)
+            df_time = df_time.dropna()
+            df_time = df_time.sort_index()
+            df_time.plot(kind='bar', ax=ax1, color='blue')
+            ax1.set_xlabel('Year')
         ax1.set_title('Pages Printed Over Time')
         ax1.set_ylabel('Pages Printed')
         ax1.grid(True)
