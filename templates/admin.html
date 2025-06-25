@@ -1,404 +1,270 @@
 {% extends "base.html" %}
-
 {% block title %}Admin Management{% endblock %}
 
 {% block content %}
-<div style="position: fixed; top: 0; left: 0; width: 100%; background-color: #1e1e1e; padding: 1rem 0; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.7);">
-  <h2 style="margin: 0; color: #eceff1; text-align: center; font-weight: 600;">👑 Admin User Management</h2>
-</div>
+<div class="container py-5">
+  <h2 class="text-center mb-5">👑 Admin User Management</h2>
 
-<div style="padding-top: 4rem;"></div>
-
-<div class="container d-flex" style="gap: 2rem; max-width: 900px; overflow-x: hidden;">
-
-  <!-- Left Panel: User Selection and Add New User -->
-  <div class="user-selection-panel" style="flex: 1; background-color: #263238; border-radius: 16px; padding: 1.5rem; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); border: 1.5px solid #37474f; display: flex; flex-direction: column; gap: 2rem;">
-    <div>
-      <div class="card-header bg-primary text-white mb-3" style="border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: 1.25rem; user-select: none;">Users</div>
-      <ul id="userList" class="list-group-flush" style="margin-bottom: 1.5rem; padding-left: 0;">
-        <!-- Example static users, replace with dynamic data -->
-        <li class="list-group-item" data-username="alice">alice</li>
-        <li class="list-group-item" data-username="bob">bob</li>
-        <li class="list-group-item" data-username="charlie">charlie</li>
-        <!-- Add more users dynamically -->
-      </ul>
-    </div>
-
-    <div>
-      <div class="card-header bg-primary text-white mb-2" style="border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: 1.25rem; user-select: none;">Add New User</div>
-      <form id="addUserForm" class="row g-3 align-items-center">
-        <div class="col-12 mb-2">
-          <label for="newUsername" class="form-label">Username</label>
-          <input type="text" id="newUsername" class="form-control" placeholder="Enter username" required>
+  <div class="row g-4">
+    <!-- User List & Add User -->
+    <div class="col-md-6">
+      <div class="card bg-dark text-white shadow">
+        <div class="card-header bg-primary text-white">
+          <strong>Users</strong>
         </div>
-        <div class="col-12 mb-3">
-          <label class="form-label">Permissions</label>
-          <div class="form-check form-check-inline ms-3">
-            <input class="form-check-input" type="checkbox" id="permView" value="view">
-            <label class="form-check-label" for="permView">View</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="permUpload" value="upload">
-            <label class="form-check-label" for="permUpload">Upload</label>
-          </div>
-          <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" id="permAdmin" value="admin">
-            <label class="form-check-label" for="permAdmin">Admin</label>
-          </div>
+        <ul id="userList" class="list-group list-group-flush">
+          {% for username in users %}
+            <li class="list-group-item" data-username="{{ username }}">{{ username }}</li>
+          {% endfor %}
+        </ul>
+
+        <div class="card-header bg-primary text-white mt-4">
+          <strong>Add New User</strong>
         </div>
-        <div class="col-12 d-flex justify-content-center">
+        <form id="addUserForm" class="p-3">
+          <div class="mb-3">
+            <label for="newUsername" class="form-label">Username</label>
+            <input type="text" id="newUsername" class="form-control" placeholder="Enter username" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Permission</label><br>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="newUserPermission" id="permView" value="view">
+              <label class="form-check-label" for="permView">View</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="newUserPermission" id="permUpload" value="upload">
+              <label class="form-check-label" for="permUpload">Upload</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="newUserPermission" id="permAdmin" value="admin">
+              <label class="form-check-label" for="permAdmin">Admin</label>
+            </div>
+          </div>
           <button type="submit" class="btn btn-success w-100">Add User</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Manage Selected User -->
+    <div class="col-md-6">
+      <div class="card bg-dark text-white shadow">
+        <div class="card-header bg-secondary text-white">
+          <strong>Manage User Permissions</strong>
         </div>
-      </form>
+        <form id="userPermissionsForm" class="p-3">
+          <div class="mb-3">
+            <label for="selectedUsername" class="form-label">Selected User</label>
+            <input type="text" id="selectedUsername" class="form-control" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Permission</label><br>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="permissionRadio" id="manageView" value="view">
+              <label class="form-check-label" for="manageView">View</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="permissionRadio" id="manageUpload" value="upload">
+              <label class="form-check-label" for="manageUpload">Upload</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="permissionRadio" id="manageAdmin" value="admin">
+              <label class="form-check-label" for="manageAdmin">Admin</label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Save Changes</button>
+        </form>
+      </div>
     </div>
   </div>
-
-  <!-- Right Panel: Manage Selected User -->
-  <div class="manage-user-panel" style="flex: 1; background-color: #263238; border-radius: 16px; padding: 1.5rem; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6); border: 1.5px solid #37474f;">
-    <div class="card-header bg-secondary text-white mb-3" style="border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: 1.25rem; user-select: none;">Manage User Permissions</div>
-    <form id="userPermissionsForm">
-      <div class="mb-3">
-        <label for="selectedUsername" class="form-label">Selected User</label>
-        <input type="text" id="selectedUsername" class="form-control" readonly>
-      </div>
-      <div class="form-check form-check-inline ms-3">
-        <input class="form-check-input" type="checkbox" id="manageView" value="view">
-        <label class="form-check-label" for="manageView">View</label>
-      </div>
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="checkbox" id="manageUpload" value="upload">
-        <label class="form-check-label" for="manageUpload">Upload</label>
-      </div>
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="checkbox" id="manageAdmin" value="admin">
-        <label class="form-check-label" for="manageAdmin">Admin</label>
-      </div>
-      <div class="mt-4 text-end">
-        <button type="submit" class="btn btn-primary">Save Changes</button>
-      </div>
-    </form>
-  </div>
-
 </div>
 
 <script>
-  // Sample user data - in real app, this should come from backend
-  const users = {
-    alice: { view: true, upload: false, admin: false },
-    bob: { view: true, upload: true, admin: false },
-    charlie: { view: false, upload: false, admin: true }
-  };
+// User data passed from Flask backend
+const users = JSON.parse(`{{ users | tojson | safe }}`);
 
-  const userList = document.getElementById('userList');
-  const selectedUsernameInput = document.getElementById('selectedUsername');
-  const manageView = document.getElementById('manageView');
-  const manageUpload = document.getElementById('manageUpload');
-  const manageAdmin = document.getElementById('manageAdmin');
+const userList = document.getElementById('userList');
+const selectedUsernameInput = document.getElementById('selectedUsername');
+const manageView = document.getElementById('manageView');
+const manageUpload = document.getElementById('manageUpload');
+const manageAdmin = document.getElementById('manageAdmin');
+let selectedUser = null;
 
-  let selectedUser = null;
+function clearSelection() {
+  userList.querySelectorAll('li').forEach(item => item.classList.remove('active'));
+}
 
-  // Function to clear selection highlight
-  function clearSelection() {
-    const items = userList.querySelectorAll('li');
-    items.forEach(item => item.classList.remove('active'));
+function updateManageUserForm(username) {
+  selectedUsernameInput.value = username;
+  const perms = users[username];
+
+  // Set only one permission checked
+  manageView.checked = perms.view && !perms.upload && !perms.admin;
+  manageUpload.checked = perms.upload && !perms.view && !perms.admin;
+  manageAdmin.checked = perms.admin && !perms.view && !perms.upload;
+}
+
+userList.addEventListener('click', (e) => {
+  if (e.target && e.target.tagName === 'LI') {
+    const username = e.target.getAttribute('data-username');
+    selectedUser = username;
+    clearSelection();
+    e.target.classList.add('active');
+    updateManageUserForm(username);
+  }
+});
+
+const firstUser = userList.querySelector('li');
+if (firstUser) {
+  firstUser.classList.add('active');
+  selectedUser = firstUser.getAttribute('data-username');
+  updateManageUserForm(selectedUser);
+}
+
+document.getElementById('addUserForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  const username = document.getElementById('newUsername').value.trim();
+  if (!username || users[username]) {
+    alert('Invalid or duplicate username.');
+    return;
   }
 
-  // Function to update manage user form based on selected user
-  function updateManageUserForm(username) {
-    selectedUsernameInput.value = username;
-    const perms = users[username];
-    manageView.checked = perms.view;
-    manageUpload.checked = perms.upload;
-    manageAdmin.checked = perms.admin;
+  const selectedPermission = document.querySelector('input[name="newUserPermission"]:checked');
+  if (!selectedPermission) {
+    alert('Please select a permission.');
+    return;
   }
 
-  // Handle user selection from list
-  userList.addEventListener('click', (e) => {
-    if (e.target && e.target.tagName === 'LI') {
-      const username = e.target.getAttribute('data-username');
-      if (!username) return;
-      selectedUser = username;
-      clearSelection();
-      e.target.classList.add('active');
-      updateManageUserForm(username);
-    }
-  });
+  const roles = [selectedPermission.value];
 
-  // Initialize with first user selected
-  const firstUser = userList.querySelector('li');
-  if (firstUser) {
-    firstUser.classList.add('active');
-    selectedUser = firstUser.getAttribute('data-username');
-    updateManageUserForm(selectedUser);
-  }
-
-  // Handle add new user form submission
-  document.getElementById('addUserForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const username = document.getElementById('newUsername').value.trim();
-    if (!username) return alert('Please enter a username.');
-
-    if (users.hasOwnProperty(username)) {
-      alert('User already exists.');
+  fetch('/add_user', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ username, roles })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.error) {
+      alert(`Error: ${data.error}`);
       return;
     }
 
-    const view = document.getElementById('permView').checked;
-    const upload = document.getElementById('permUpload').checked;
-    const admin = document.getElementById('permAdmin').checked;
+    // Update frontend
+    users[username] = {
+      view: roles.includes('view'),
+      upload: roles.includes('upload'),
+      admin: roles.includes('admin')
+    };
 
-    // Add user to data
-    users[username] = { view, upload, admin };
-
-    // Add user to list
     const li = document.createElement('li');
     li.className = 'list-group-item';
     li.setAttribute('data-username', username);
     li.textContent = username;
     userList.appendChild(li);
 
-    // Clear form
     this.reset();
-
-    // Select the new user
     clearSelection();
     li.classList.add('active');
     selectedUser = username;
     updateManageUserForm(username);
+  })
+  .catch(error => {
+    console.error('Request failed:', error);
+    alert('An error occurred while adding the user.');
   });
+});
 
-  // Handle manage user permissions form submission
-  document.getElementById('userPermissionsForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    if (!selectedUser) {
-      alert('No user selected.');
+document.getElementById('userPermissionsForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  if (!selectedUser) return alert('No user selected.');
+
+  const selectedRole = document.querySelector('input[name="permissionRadio"]:checked');
+  if (!selectedRole) {
+    alert('Please select a permission.');
+    return;
+  }
+
+  const roles = [selectedRole.value];
+
+  fetch('/update_user_permissions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: selectedUser, roles })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.error) {
+      alert(`Error: ${data.error}`);
       return;
     }
-    users[selectedUser].view = manageView.checked;
-    users[selectedUser].upload = manageUpload.checked;
-    users[selectedUser].admin = manageAdmin.checked;
-    alert('Permissions updated for ' + selectedUser);
-    // Here you can add code to send updated permissions to backend
+
+    users[selectedUser] = {
+      view: roles.includes('view'),
+      upload: roles.includes('upload'),
+      admin: roles.includes('admin')
+    };
+
+    alert(`Permissions updated for ${selectedUser}`);
+  })
+  .catch(error => {
+    console.error('Error updating permissions:', error);
+    alert('An error occurred while updating permissions.');
   });
+});
 </script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
-
 body {
   background-color: #121212;
   font-family: 'Poppins', sans-serif;
   color: #cfd8dc;
-  margin: 0;
   padding: 3rem 1rem;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  overflow-x: hidden;
 }
-
-.container {
-  background-color: #1e1e1e;
-  border-radius: 16px;
-  max-width: 900px;
-  width: 100%;
-  padding: 2.5rem 1rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
-  box-sizing: border-box;
-  display: flex;
-  gap: 2rem;
-}
-
-h2.mb-4 {
-  font-weight: 600;
-  font-size: 2.4rem;
-  text-align: center;
-  margin-bottom: 2rem;
-  color: #eceff1;
-  letter-spacing: 0.05em;
-}
-
-form.row.g-3 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  justify-content: space-between;
-  margin-bottom: 3rem;
-}
-
-form .col-md-3 {
-  flex: 1 1 30%;
-  min-width: 200px;
-}
-
-label.form-label {
-  display: block;
-  font-weight: 600;
-  font-size: 0.9rem;
-  margin-bottom: 0.6rem;
-  color: #90a4ae;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  user-select: none;
-}
-
-input.form-control,
-select.form-select {
-  width: 100%;
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
-  border-radius: 10px;
-  border: 1.5px solid #37474f;
-  background-color: #263238;
-  color: #eceff1;
-  font-weight: 500;
-  outline: none;
-  transition: border-color 0.25s ease;
-}
-
-input.form-control::placeholder {
-  color: #78909c;
-}
-
-input.form-control:focus,
-select.form-select:focus {
-  border-color: #4fc3f7;
-  box-shadow: 0 0 6px #4fc3f7a0;
-  background-color: #37474f;
-  color: #f0f4f8;
-}
-
-.d-none {
-  display: none !important;
-}
-
-button.btn {
-  width: 100%;
-  cursor: pointer;
-  padding: 0.6rem 1.6rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  border-radius: 14px;
-  border: none;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #eceff1;
-  background-color: #0288d1;
-  box-shadow: 0 4px 12px #0288d1aa;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-  user-select: none;
-}
-
-button.btn:hover {
-  background-color: #039be5;
-  box-shadow: 0 6px 18px #039be5cc;
-  transform: translateY(-2px);
-}
-
-button.btn-outline-secondary {
-  background: transparent;
-  color: #4fc3f7;
-  border: 2px solid #4fc3f7;
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-button.btn-outline-secondary:hover {
-  background-color: #4fc3f7;
-  color: #121212;
-  box-shadow: 0 6px 18px #4fc3f7cc;
-  transform: translateY(-2px);
-}
-
-button.btn-outline-info {
-  background: transparent;
-  color: #82b1ff;
-  border: 2px solid #82b1ff;
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-button.btn-outline-info:hover {
-  background-color: #82b1ff;
-  color: #121212;
-  box-shadow: 0 6px 18px #82b1ffcc;
-  transform: translateY(-2px);
-}
-
 .card {
   background-color: #263238;
   border-radius: 16px;
-  padding: 1.8rem 2rem;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
-  transition: transform 0.3s ease;
   border: 1.5px solid #37474f;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
-
 .card:hover {
   transform: translateY(-6px);
   box-shadow: 0 14px 36px rgba(3, 155, 229, 0.5);
 }
-
 .card-header {
   font-weight: 600;
   font-size: 1.25rem;
-  color: #b0bec5;
-  margin-bottom: 1rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  user-select: none;
 }
-
-.list-group-flush {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
 .list-group-item {
-  display: flex;
-  justify-content: flex-start;
-  padding: 0.65rem 0.8rem;
+  background-color: #37474f;
   color: #cfd8dccc;
   font-weight: 500;
-  border-bottom: 1px solid #37474f;
-  border-radius: 8px;
-  background-color: #37474f;
-  margin-bottom: 0.35rem;
-  transition: background-color 0.2s ease;
+  border: none;
   cursor: pointer;
-  user-select: none;
 }
-
-.list-group-item:hover {
-  background-color: #455a64;
-  color: #eceff1;
-}
-
 .list-group-item.active {
   background-color: #0288d1;
   color: #eceff1;
-  font-weight: 700;
 }
-
-@media (max-width: 720px) {
-  .container {
-    flex-direction: column;
-  }
-  .user-selection-panel,
-  .manage-user-panel {
-    max-height: none;
-  }
-  form.row.g-3 {
-    flex-direction: column;
-  }
-  form .col-md-3 {
-    width: 100%;
-  }
-  .card {
-    padding: 1.4rem 1.6rem;
-  }
+input.form-control {
+  background-color: #263238;
+  color: #eceff1;
+  border: 1.5px solid #37474f;
+}
+input.form-control:focus {
+  border-color: #4fc3f7;
+  background-color: #37474f;
+}
+button.btn {
+  border-radius: 14px;
+  text-transform: uppercase;
+  font-weight: 600;
 }
 </style>
-
 {% endblock %}
