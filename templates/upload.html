@@ -60,17 +60,6 @@
             </a>
           </form>
 
-          {% with messages = get_flashed_messages() %}
-            {% if messages %}
-              <div class="flash-messages">
-                <ul>
-                  {% for msg in messages %}
-                    <li>{{ msg }}</li>
-                  {% endfor %}
-                </ul>
-              </div>
-            {% endif %}
-          {% endwith %}
         </div>
       </div>
 
