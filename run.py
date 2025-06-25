@@ -845,6 +845,10 @@ def dashboard():
         elif time_filter == 'monthly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
             if not pd.isna(filter_date):
+                year_int = filter_date.year
+                # For graph 1, filter to entire year to show all months
+                df_time_graph1 = df[df['date'].dt.year == year_int].groupby('month')['pages_printed'].sum()
+                # For other data, filter to selected month
                 month_str = filter_date.strftime("%b'%y")
                 df = df[df['month'] == month_str]
         elif time_filter == 'yearly' and year_input:
@@ -1238,7 +1242,23 @@ def dashboard_visualize():
         if time_filter in ['daily', 'weekly']:
             df_time = df.groupby(df['date'].dt.date)['pages_printed'].sum()
         elif time_filter == 'monthly':
-            df_time = df.groupby('month')['pages_printed'].sum()
+            # Separate query for graph 1 to show all months data for current year
+            current_year = pd.Timestamp.now().year
+            df_time_graph1 = df[df['date'].dt.year == current_year].groupby('month')['pages_printed'].sum()
+            # Debug: log unique month values and counts for current year in df_time_graph1
+            import logging
+            logging.debug(f"Unique months and counts for current year in df_time_graph1:\\n{df_time_graph1}")
+            # Convert month strings like "May'25" to datetime for sorting
+            def parse_month_str(m):
+                try:
+                    return pd.to_datetime(m, format="%b'%y")
+                except Exception:
+                    return pd.NaT
+            df_time_graph1.index = df_time_graph1.index.map(parse_month_str)
+            df_time_graph1 = df_time_graph1.dropna()
+            df_time_graph1 = df_time_graph1.sort_index()
+            # For graph 1, use df_time_graph1 with all months of the year
+            df_time = df_time_graph1
         else:  # yearly
             df_time = df.groupby(df['date'].dt.year)['pages_printed'].sum()
 
@@ -1268,26 +1288,21 @@ def dashboard_visualize():
             df_time.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Date')
         elif time_filter in ['monthly']:
-            # Convert month strings like "May'25" to datetime for sorting
+            # Use separate df_time_graph1 for graph 1 to show all months of current year
             def parse_month_str(m):
                 try:
                     return pd.to_datetime(m, format="%b'%y")
                 except Exception:
                     return pd.NaT
-            df_time.index = df_time.index.map(parse_month_str)
-            df_time = df_time.dropna()
-            df_time = df_time.sort_index()
-            df_time.plot(kind='bar', ax=ax1, color='blue')
+            df_time_graph1.index = df_time_graph1.index.map(parse_month_str)
+            df_time_graph1 = df_time_graph1.dropna()
+            df_time_graph1 = df_time_graph1.sort_index()
+            df_time_graph1.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Month')
+            # Set x-axis tick labels to month names only (e.g., May, Jun)
+            ax1.set_xticklabels([dt.strftime('%b') for dt in df_time_graph1.index], rotation=45, ha='right')
         else:
-            def parse_month_str(m):
-                try:
-                    dt = pd.to_datetime(m, format="%b'%y")
-                    return dt.year
-                except Exception:
-                    return pd.NaT
-            df_time.index = df_time.index.map(parse_month_str)
-            df_time = df_time.dropna()
+            # For yearly data, index is already year integers, no need to parse
             df_time = df_time.sort_index()
             df_time.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Year')
