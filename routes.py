@@ -161,8 +161,6 @@ def upload():
                 flash(f"Excel file must contain columns: {expected_cols}")
                 return redirect(url_for('routes.upload'))
 
-            df['date'] = df['date'].astype(str).str.strip()
-
             def clean_string(s):
                 if pd.isna(s):
                     return None
@@ -174,9 +172,26 @@ def upload():
                 if col in df.columns:
                     df[col] = df[col].apply(clean_string)
 
+            # Enhanced cleaning for date column
+            def clean_date_string(s):
+                if pd.isna(s):
+                    return None
+                s = str(s)
+                # Remove control chars and non-printable characters
+                s = re.sub(r'[\x00-\x1F\x7F-\x9F\u200B-\u200D\uFEFF]', '', s)
+                s = s.strip()
+                return s
+
+            df['date'] = df['date'].apply(clean_date_string)
+
+            # Debug logging for date strings that fail parsing
+            raw_dates = df['date'].astype(str).tolist()
+            logging.debug(f"Raw date strings before parsing: {raw_dates[:10]}")
+
             date_formats = [
                 '%Y-%m-%d %H:%M:%S',
                 '%d-%m-%Y %H:%M:%S',
+                '%m/%d/%Y %H:%M:%S',
                 '%Y-%m-%d',
                 '%d-%m-%Y',
                 '%m/%d/%Y',
@@ -194,17 +209,10 @@ def upload():
                 '%Y%m%d',
             ]
 
-            def try_parsing_date(text):
-                for fmt in date_formats:
-                    try:
-                        return datetime.strptime(text, fmt)
-                    except Exception:
-                        continue
-                return pd.NaT
+            # Use pandas.to_datetime with dayfirst=True for robust parsing
+            df['date'] = pd.to_datetime(df['date'], dayfirst=True, errors='coerce')
 
-            df['date'] = df['date'].apply(try_parsing_date)
-
-            logging.info(f"Date column after custom parsing:\\n{df['date'].head()}")
+            logging.info(f"Date column after parsing with pandas.to_datetime:\\n{df['date'].head()}")
 
             initial_row_count = len(df)
             invalid_dates = df[df['date'].isna()]
@@ -270,10 +278,23 @@ def upload():
                     return redirect(url_for('routes.upload'))
 
             try:
+                # Remove duplicate rows based on user_name, hostname, and date columns
+                before_dedup_count = len(df)
+                df = df.drop_duplicates(subset=['user name', 'hostname', 'date'])
+                after_dedup_count = len(df)
+                skipped_count = before_dedup_count - after_dedup_count
+                logging.info(f"Skipped {skipped_count} duplicate rows based on user_name, hostname, and date in uploaded file.")
+                if skipped_count > 0:
+                    flash(f"Skipped {skipped_count} duplicate entries in the uploaded file.")
+
+                import os
+                from datetime import datetime
+                uploaded_by = os.getlogin()
+                upload_date = datetime.now()
                 chunk_size = 5000
                 for start in range(0, len(df), chunk_size):
                     chunk = df.iloc[start:start+chunk_size]
-                    insert_data_to_db(chunk)
+                    insert_data_to_db(chunk, uploaded_by=uploaded_by, upload_date=upload_date)
             except Exception as e:
                 flash(f"Error inserting data into database: {e}")
                 logging.error(f"Error inserting data into database: {e}")

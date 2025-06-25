@@ -3,8 +3,10 @@ import pandas as pd
 from sqlalchemy import text
 from config import get_sqlalchemy_engine
 
-def insert_data_to_db(df):
+def insert_data_to_db(df, uploaded_by='system', upload_date=None):
     import datetime
+    if upload_date is None:
+        upload_date = datetime.datetime.now()
     insert_sql = """
     INSERT INTO printer_logs (
         document_name, user_name, hostname, pages_printed, date, month, week, printer_model, division, location, upload_date, uploaded_by
@@ -54,8 +56,8 @@ def insert_data_to_db(df):
                 'printer_model': printer_model,
                 'division': division,
                 'location': location,
-                'upload_date': datetime.datetime.now(),
-                'uploaded_by': 'system'  # or get from session/user context
+                'upload_date': upload_date,
+                'uploaded_by': uploaded_by
             })
 
         with engine.begin() as conn:
