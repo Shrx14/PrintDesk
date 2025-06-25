@@ -74,7 +74,7 @@
     Showing default data for <strong>last month</strong> and <strong>{{ division_filter }}</strong> division.
   </div>
   <div class="text-center mb-4">
-    <a href="{{ url_for('dashboard', time_filter='monthly', division_filter='PY' if division_filter == 'PT' else 'PT', month_input=month_input) }}"
+<a href="{{ url_for('routes.dashboard', time_filter='monthly', division_filter='PY' if division_filter == 'PT' else 'PT', month_input=month_input) }}"
        class="btn btn-outline-secondary">
       Switch to {{ 'PY' if division_filter == 'PT' else 'PT' }} Division
     </a>
@@ -105,7 +105,7 @@
   {% endif %}
   <div id="flash-container"></div>
   <!-- Filters -->
-  <form id="filterForm" method="get" action="{{ url_for('dashboard') }}" class="row g-3 align-items-end mb-4">
+<form id="filterForm" method="get" action="{{ url_for('routes.dashboard') }}" class="row g-3 align-items-end mb-4">
     <div class="col-md-3">
       <label for="time_filter" class="form-label">Filter by Time</label>
       <select id="time_filter" name="time_filter" class="form-select" onchange="updateDateInputVisibility()">
@@ -168,7 +168,7 @@
     </div>
 
     <div class="col-md-3">
-      <a id="exportExcelBtn" href="{{ url_for('dashboard_export', time_filter=time_filter, location_filter=location_filter, division_filter=division_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success w-100">
+<a id="exportExcelBtn" href="{{ url_for('routes.dashboard_export', time_filter=time_filter, location_filter=location_filter, division_filter=division_filter, date_input=date_input, month_input=month_input, year_input=year_input, week_select=week_select) }}" class="btn btn-success w-100">
         ⬇️ Export to Excel
         <span id="exportLoadingSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
       </a>

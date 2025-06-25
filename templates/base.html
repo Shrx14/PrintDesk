@@ -124,13 +124,13 @@
   <header>
     <div class="header-left">
       <img src="/static/images/ril-logo.png" alt="RIL Logo">
-      <h1><a href="{{ url_for('home') }}">Printer Desk</a></h1>
+<h1><a href="{{ url_for('routes.home') }}">Printer Desk</a></h1>
     </div>
     <nav>
-      <a href="{{ url_for('upload') }}"><i class="fas fa-upload"></i> Upload</a>
-      <a href="{{ url_for('view') }}"><i class="fas fa-table"></i> View Data</a>
-      <a href="{{ url_for('dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
-      <a href="{{ url_for('exceptions') }}"><i class="fas fa-exclamation-triangle"></i> Exceptions</a>
+      <a href="{{ url_for('routes.upload') }}"><i class="fas fa-upload"></i> Upload</a>
+      <a href="{{ url_for('routes.view') }}"><i class="fas fa-table"></i> View Data</a>
+      <a href="{{ url_for('routes.dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
+      <a href="{{ url_for('routes.exceptions') }}"><i class="fas fa-exclamation-triangle"></i> Exceptions</a>
     </nav>
   </header>
 

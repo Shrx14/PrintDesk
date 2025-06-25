@@ -92,7 +92,7 @@
         </div>
       </div>
 
-      <form method="post" action="{{ url_for('exceptions') }}">
+<form method="post" action="{{ url_for('routes.exceptions') }}">
         <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; width: 100%;">
           {% if printers %}
           <table id="printersTable" class="table table-sm table-hover">
@@ -150,7 +150,7 @@
                 <td>{{ ex.location or '' }}</td>
                 <td>{{ ex.division or '' }}</td>
                 <td>
-                  <form method="post" action="{{ url_for('delete_exception', exception_id=ex.id) }}" onsubmit="return confirm('Are you sure you want to delete this exception?');">
+<form method="post" action="{{ url_for('routes.delete_exception', exception_id=ex.id) }}" onsubmit="return confirm('Are you sure you want to delete this exception?');">
                     <button type="submit" class="btn btn-sm btn-danger">Remove</button>
                   </form>
                 </td>

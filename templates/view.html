@@ -22,7 +22,7 @@
     </div>
   {% endif %}
 
-<form id="filter-form" method="get" action="{{ url_for('view') }}">
+<form id="filter-form" method="get" action="{{ url_for('routes.view') }}">
   <!-- Bootstrap-style floating labels workaround -->
 <div class="row mb-3" style="max-width: 500px;">
   <div class="col">
@@ -98,7 +98,7 @@
         button.disabled = true;
 
         // Build download URL with query string if present
-        var downloadUrl = "{{ url_for('download_excel') }}";
+        var downloadUrl = "{{ url_for('routes.download_excel') }}";
         var queryString = "{{ query_string }}";
         if (queryString) {
           downloadUrl += '?' + queryString;
@@ -210,7 +210,7 @@
     {% if page > 1 %}
       {% set prev_args = args.copy() %}
       {% set _ = prev_args.update({'page': page - 1}) %}
-      <li class="page-item"><a class="page-link" href="{{ url_for('view', **prev_args) }}">Previous</a></li>
+      <li class="page-item"><a class="page-link" href="{{ url_for('routes.view', **prev_args) }}">Previous</a></li>
     {% else %}
       <li class="page-item disabled"><span class="page-link">Previous</span></li>
     {% endif %}
@@ -222,7 +222,7 @@
     {% if start_page > 1 %}
       {% set first_args = args.copy() %}
       {% set _ = first_args.update({'page': 1}) %}
-      <li class="page-item"><a class="page-link" href="{{ url_for('view', **first_args) }}">1</a></li>
+      <li class="page-item"><a class="page-link" href="{{ url_for('routes.view', **first_args) }}">1</a></li>
       {% if start_page > 2 %}
         <li class="page-item disabled"><span class="page-link">…</span></li>
       {% endif %}
@@ -232,7 +232,7 @@
       {% set page_args = args.copy() %}
       {% set _ = page_args.update({'page': p}) %}
       <li class="page-item {% if p == page %}active{% endif %}">
-        <a class="page-link" href="{{ url_for('view', **page_args) }}">{{ p }}</a>
+        <a class="page-link" href="{{ url_for('routes.view', **page_args) }}">{{ p }}</a>
       </li>
     {% endfor %}
 
@@ -242,13 +242,13 @@
       {% endif %}
       {% set last_args = args.copy() %}
       {% set _ = last_args.update({'page': total_pages}) %}
-      <li class="page-item"><a class="page-link" href="{{ url_for('view', **last_args) }}">{{ total_pages }}</a></li>
+      <li class="page-item"><a class="page-link" href="{{ url_for('routes.view', **last_args) }}">{{ total_pages }}</a></li>
     {% endif %}
 
     {% if page < total_pages %}
       {% set next_args = args.copy() %}
       {% set _ = next_args.update({'page': page + 1}) %}
-      <li class="page-item"><a class="page-link" href="{{ url_for('view', **next_args) }}">Next</a></li>
+      <li class="page-item"><a class="page-link" href="{{ url_for('routes.view', **next_args) }}">Next</a></li>
     {% else %}
       <li class="page-item disabled"><span class="page-link">Next</span></li>
     {% endif %}
@@ -312,7 +312,7 @@
 
 {% else %}
 <div class="alert alert-warning text-center">
-  No data uploaded yet. Please <a href="{{ url_for('upload') }}">upload an Excel file</a> first.
+  No data uploaded yet. Please <a href="{{ url_for('routes.upload') }}">upload an Excel file</a> first.
 </div>
 {% endif %}
 {% endblock %}
