@@ -169,8 +169,6 @@ def create_roles_table_if_not_exists():
         from flask import flash
         flash(f"Error creating roles table: {e}")
 
-create_roles_table_if_not_exists()
-
 import time
 
 def insert_data_to_db(df):
