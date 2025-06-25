@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash , jsonify
+from flask import Flask, request, render_template, redirect, url_for, flash , jsonify, abort
 import pandas as pd
 from io import BytesIO
 import pyodbc
@@ -1222,5 +1222,100 @@ def dashboard_visualize():
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+    
+import os    
+
+@app.route('/admin')
+def admin():
+    username = os.getlogin()  # Get Windows username
+
+    # Connect to DB
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check roles for current user
+    cursor.execute("SELECT roles FROM roles WHERE user_name = ?", username)
+    row = cursor.fetchone()
+
+    if not row or 'admin' not in row[0].lower():
+        cursor.close()
+        conn.close()
+        return abort(403)
+    
+    # Fetch all users and their roles
+    cursor.execute("SELECT user_name, roles FROM roles")
+    users = cursor.fetchall()
+
+    # Convert to dictionary {username: {view: bool, upload: bool, admin: bool}}
+    user_data = {}
+    for user_name, roles in users:
+        roles_lower = roles.lower()
+        user_data[user_name] = {
+            'view': 'view' in roles_lower,
+            'upload': 'upload' in roles_lower,
+            'admin': 'admin' in roles_lower
+        }
+    
+    cursor.close()
+    conn.close()
+
+    return render_template('admin.html', users=user_data)
+
+@app.route('/add_user', methods=['POST'])
+def add_user():
+    data = request.get_json()
+    username = data.get('username')
+    roles = data.get('roles', [])
+
+    if not username or not isinstance(roles, list):
+        return jsonify({'error': 'Invalid input'}), 400
+
+    # Combine roles into comma-separated string
+    roles_str = ','.join(roles)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("INSERT INTO roles (user_name, roles) VALUES (?, ?)", username, roles_str)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({'message': 'User added successfully'})
+
+@app.route('/update_user_permissions', methods=['POST'])
+def update_user_permissions():
+    data = request.get_json()
+    username = data.get('username')
+    roles = data.get('roles', [])
+
+    if not username or not isinstance(roles, list):
+        return jsonify({'error': 'Invalid input'}), 400
+
+    roles_str = ','.join(roles)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("UPDATE roles SET roles = ? WHERE user_name = ?", (roles_str, username))
+        if cursor.rowcount == 0:
+            # No user found with this username
+            return jsonify({'error': 'User not found'}), 404
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({'message': 'Permissions updated successfully'})
+
 
 app.run(host='0.0.0.0', port=5000, debug=True)
