@@ -27,6 +27,9 @@
     border-radius: 8px;
     padding: 20px;
     border: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
   }
 
   /* Table row hover effect with shadow */
@@ -92,10 +95,10 @@
         </div>
       </div>
 
-<form method="post" action="{{ url_for('routes.exceptions') }}">
-        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; width: 100%;">
+<form method="post" action="{{ url_for('routes.exceptions') }}" style="display: flex; flex-direction: column; height: 100%;">
+        <div class="scrollable-table-container" style="max-height: 500px; overflow-x: auto; overflow-y: auto;">
           {% if printers %}
-          <table id="printersTable" class="table table-sm table-hover">
+          <table id="printersTable" class="table table-sm table-hover" style="min-width: 600px; table-layout: fixed;">
               <thead>
                 <tr>
                   <th>Select</th>
@@ -121,18 +124,20 @@
             <p>No printers found.</p>
           {% endif %}
         </div>
-        <button type="submit" class="btn btn-primary mt-2">Add Selected Printers as Exceptions</button>
-        <button type="submit" name="add_zero_pages" value="true" class="btn btn-warning mt-2">Add All Zero Pages Printed Printers to Exceptions</button>
+        <div style="margin-top: 10px;">
+          <button type="submit" class="btn btn-primary mt-2">Add Selected Printers as Exceptions</button>
+          <button type="submit" name="add_zero_pages" value="true" class="btn btn-warning mt-2">Add All Zero Pages Printed Printers to Exceptions</button>
+        </div>
       </form>
     </div>
   </div>
   
   <div class="col-md-6">
-    <div class="card shadow-sm p-3 mb-4">
+    <div class="card shadow-sm p-3 mb-4" style="display: flex; flex-direction: column; height: 100%;">
       <h4>Existing Exceptions</h4>
-        <div style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; width: 100%;">
+        <div class="scrollable-table-container" style="max-height: 500px; overflow-x: auto; overflow-y: auto;">
           {% if exceptions %}
-          <table class="table table-striped table-bordered">
+          <table class="table table-striped table-bordered" style="min-width: 600px; table-layout: fixed;">
             <thead>
               <tr>
                 <th>Hostname</th>

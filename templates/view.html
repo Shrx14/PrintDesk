@@ -52,7 +52,7 @@
   <div class="col-auto">
     <button type="submit" class="btn btn-primary h-100">Filter</button>
   </div>
-</div>
+  </div>
 
   <!-- Global search -->
   <div class="mb-3 d-flex align-items-center" style="max-width: 400px;">
@@ -170,6 +170,26 @@
       spinner.classList.remove('d-none');
     }
   });
+
+  // New code to disable dates before from_date in to_date picker
+  const fromDateInput = document.getElementById('from_date');
+  const toDateInput = document.getElementById('to_date');
+
+  fromDateInput.addEventListener('change', function() {
+    if (this.value) {
+      toDateInput.min = this.value;
+      if (toDateInput.value && toDateInput.value < this.value) {
+        toDateInput.value = '';
+      }
+    } else {
+      toDateInput.min = '';
+    }
+  });
+
+  // Initialize min attribute on page load if from_date has value
+  if (fromDateInput.value) {
+    toDateInput.min = fromDateInput.value;
+  }
 </script>
   </div>
 
