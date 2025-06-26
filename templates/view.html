@@ -52,7 +52,7 @@
   <div class="col-auto">
     <button type="submit" class="btn btn-primary h-100">Filter</button>
   </div>
-</div>
+  </div>
 
   <!-- Global search -->
   <div class="mb-3 d-flex align-items-center" style="max-width: 400px;">
@@ -118,12 +118,78 @@ document.getElementById('download-excel-btn').addEventListener('click', function
     button.disabled = false;
   }, 15000);
 
-  iframe.onload = function() {
-    clearTimeout(fallbackTimeout);
-    spinner.style.display = 'none';
-    button.disabled = false;
-  };
-});
+        // Clear fallback if iframe loads before timeout
+        iframe.onload = function() {
+          clearTimeout(fallbackTimeout);
+          spinner.style.display = 'none';
+          button.disabled = false;
+        };
+      });
+
+      // Add validation and loading spinner for search button on form submit
+  document.getElementById('filter-form').addEventListener('submit', function (e) {
+    const fromDate = document.querySelector('input[name="from_date"]').value;
+    const toDate = document.querySelector('input[name="to_date"]').value;
+    const searchInput = document.querySelector('input[name="search"]').value;
+    const flashContainer = document.getElementById('flash-container');
+
+    // If from_date is selected but to_date is missing
+    if (fromDate !== "" && toDate === "") {
+      e.preventDefault();
+      flashContainer.innerHTML = `
+        <div class="alert alert-warning" role="alert">
+          Select the To Date or the data will be displayed till the current date.
+        </div>
+      `;
+      return false;
+    }
+
+    // If to_date is selected but from_date is missing
+    if (toDate !== "" && fromDate === "") {
+      e.preventDefault();
+      flashContainer.innerHTML = `
+        <div class="alert alert-warning" role="alert">
+          Please select the 'From Date'; otherwise, data will be shown from the start date of the data.
+        </div>
+      `;
+      return false;
+    }
+
+    // If search is used, but from_date or to_date is missing
+    if (searchInput.trim() !== "" && (fromDate === "" || toDate === "")) {
+      e.preventDefault();
+      alert("Please select both From and To dates before using the search box.");
+      return false;
+    }
+
+    // Show spinner if search is being used
+    if (searchInput.trim() !== "") {
+      const searchBtn = document.getElementById('searchBtn');
+      const spinner = document.getElementById('searchLoadingSpinner');
+      searchBtn.disabled = true;
+      spinner.classList.remove('d-none');
+    }
+  });
+
+  // New code to disable dates before from_date in to_date picker
+  const fromDateInput = document.getElementById('from_date');
+  const toDateInput = document.getElementById('to_date');
+
+  fromDateInput.addEventListener('change', function() {
+    if (this.value) {
+      toDateInput.min = this.value;
+      if (toDateInput.value && toDateInput.value < this.value) {
+        toDateInput.value = '';
+      }
+    } else {
+      toDateInput.min = '';
+    }
+  });
+
+  // Initialize min attribute on page load if from_date has value
+  if (fromDateInput.value) {
+    toDateInput.min = fromDateInput.value;
+  }
 </script>
 
   </div>
