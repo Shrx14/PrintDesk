@@ -1111,7 +1111,7 @@ def dashboard_visualize():
         fig4, ax4 = plt.subplots(figsize=(8, 4))
         least_printers_3m.plot(kind='bar', ax=ax4, color='orange')
         ax4.set_title('Last 3 Months Pages Printed (10 Least Used Printers)')
-        ax4.set_xlabel('Printer Model')
+        ax4.set_xlabel(' Hostname ')
         ax4.set_ylabel('Pages Printed')
         ax4.grid(axis='y')
         graph4 = plot_to_base64(fig4)
