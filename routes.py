@@ -133,6 +133,18 @@ def api_home():
 
 @routes.route('/upload', methods=['GET', 'POST'])
 def upload():
+    import os
+    username = os.getlogin()
+    from db import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT roles FROM roles WHERE user_name = ?", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if not row or 'upload' not in row[0].lower():
+        return render_template('forbidden.html')
+
     if request.method == 'POST':
         file = request.files.get('file')
         if not file:
