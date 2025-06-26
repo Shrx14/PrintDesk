@@ -691,6 +691,18 @@ def dashboard_export():
 
 @routes.route('/exceptions', methods=['GET', 'POST'])
 def exceptions():
+    import os
+    username = os.getlogin()
+    from db import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT roles FROM roles WHERE user_name = ?", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if not row or ('upload' not in row[0].lower() and 'admin' not in row[0].lower()):
+        return render_template('forbidden.html')
+
     engine = get_sqlalchemy_engine()
     message = None
     error = None
