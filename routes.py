@@ -1,3 +1,4 @@
+import pyodbc
 from flask import Blueprint, Flask, request, render_template, redirect, url_for, flash, jsonify, send_file
 import pandas as pd
 from io import BytesIO
@@ -30,6 +31,11 @@ import os
 from flask import Blueprint, Flask, request, render_template, redirect, url_for, flash, jsonify, send_file, abort, g
 
 routes = Blueprint('routes', __name__)
+
+@routes.errorhandler(pyodbc.OperationalError)
+def handle_db_connection_error(error):
+    logging.error(f"Database connection error: {error}")
+    return render_template('db_error.html'), 500
 
 def get_user_roles():
     username = os.getlogin()
