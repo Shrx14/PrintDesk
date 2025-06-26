@@ -476,6 +476,8 @@ def view():
         unique_values = {col: [] for col in columns}
         total_pages = 0
 
+    if df.empty and bool(params):
+        flash("No data found for the applied filters.")
     return render_template(
         'view.html',
         data=df,
