@@ -47,7 +47,7 @@ def get_user_roles():
 @routes.before_app_request
 def before_request():
     allowed_paths_for_roles = {
-        'admin': {'/admin', '/home', '/dashboard', '/exceptions', '/view', '/upload', '/'},
+        'admin': {'/admin', '/home', '/dashboard', '/exceptions', '/view', '/upload', '/', '/update_user_permissions', '/add_user', '/download', '/dashboard/export'},
         'upload': {'/upload', '/home', '/dashboard', '/exceptions', '/view', '/'},
         'view': {'/home', '/view', '/dashboard', '/'},
     }
@@ -56,6 +56,10 @@ def before_request():
     # Normalize path to remove trailing slash except root
     if path != '/' and path.endswith('/'):
         path = path[:-1]
+
+    # Allow access to static files without role check
+    if path.startswith('/static/'):
+        return None
 
     roles = get_user_roles()
     g.user_roles = roles  # store roles in flask.g for use in routes if needed
