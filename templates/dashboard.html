@@ -204,12 +204,12 @@
             </tr>
           </thead>
           <tbody>
-            {% for printer, info in top_printers.items() %}
+            {% for printer in top_printers %}
               <tr>
-                <td>{{ printer }}</td>
-                <td>{{ info.hostname }}</td>
-                <td>{{ info.location }}</td>
-                <td class="fw-bold">{{ info.pages_printed }}</td>
+                <td>{{ printer.printer_model }}</td>
+                <td>{{ printer.hostname }}</td>
+                <td>{{ printer.location }}</td>
+                <td class="fw-bold">{{ printer.pages_printed }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -233,12 +233,12 @@
             </tr>
           </thead>
           <tbody>
-            {% for printer, info in least_printers.items() %}
+            {% for printer in least_printers %}
               <tr>
-                <td>{{ printer }}</td>
-                <td>{{ info.hostname }}</td>
-                <td>{{ info.location }}</td>
-                <td class="fw-bold">{{ info.pages_printed }}</td>
+                <td>{{ printer.printer_model }}</td>
+                <td>{{ printer.hostname }}</td>
+                <td>{{ printer.location }}</td>
+                <td class="fw-bold">{{ printer.pages_printed }}</td>
               </tr>
             {% endfor %}
           </tbody>

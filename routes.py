@@ -693,26 +693,11 @@ def dashboard():
 
         top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).to_dict()
 
-        def get_printer_info(printer_series):
-            info = {}
-            for printer_model, pages in printer_series.items():
-                subset = df[df['printer_model'] == printer_model]
-                hostname_mode = subset['hostname'].mode()
-                hostname = hostname_mode.iloc[0] if not hostname_mode.empty else ''
-                location_mode = subset['location'].mode()
-                location = location_mode.iloc[0] if not location_mode.empty else ''
-                info[printer_model] = {
-                    'pages_printed': pages,
-                    'hostname': hostname,
-                    'location': location
-                }
-            return info
+        # Remove get_printer_info function and update grouping to match export logic
+        printer_group = df.groupby(['printer_model', 'hostname', 'location'])['pages_printed'].sum().reset_index()
 
-        printer_pages_desc = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10)
-        printer_pages_asc = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
-
-        top_printers = get_printer_info(printer_pages_desc)
-        least_printers = get_printer_info(printer_pages_asc)
+        top_printers = printer_group.sort_values(by='pages_printed', ascending=False).head(10).to_dict(orient='records')
+        least_printers = printer_group.sort_values(by='pages_printed', ascending=True).head(10).to_dict(orient='records')
 
         locations = sorted(df['location'].dropna().unique())
         data = df
@@ -758,6 +743,7 @@ def dashboard_export():
         query = """
             SELECT user_name, printer_model, hostname, location, division, pages_printed, date, month, week
             FROM printer_logs
+            WHERE hostname NOT IN (SELECT hostname FROM printer_exceptions)
         """
         df = pd.read_sql_query(query, engine)
         engine.dispose()
