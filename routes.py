@@ -494,20 +494,50 @@ def download_excel():
 
     filters = []
     params = {}
+    applied_filters = []
 
+    # Search term
+    search_term = request.args.get("search", "").strip()
+    if search_term:
+        search_clauses = [f"{col} LIKE :search" for col in columns]
+        filters.append("(" + " OR ".join(search_clauses) + ")")
+        params["search"] = f"%{search_term}%"
+        applied_filters.append(f"Search: {search_term}")
+
+    # Date filters
+    from_date = request.args.get("from_date", "").strip()
+    to_date = request.args.get("to_date", "").strip()
+
+    if from_date and to_date:
+        filters.append("CAST(date AS DATE) BETWEEN :from_date AND :to_date")
+        params["from_date"] = from_date
+        params["to_date"] = to_date
+        applied_filters.append(f"Date: {from_date} to {to_date}")
+    elif from_date:
+        filters.append("CAST(date AS DATE) >= :from_date")
+        params["from_date"] = from_date
+        applied_filters.append(f"Date from: {from_date}")
+    elif to_date:
+        filters.append("CAST(date AS DATE) <= :to_date")
+        params["to_date"] = to_date
+        applied_filters.append(f"Date to: {to_date}")
+
+    # Column-specific filters
     for col in columns:
+        if col == 'date':
+            continue
         val = request.args.get(col)
         if val:
             filters.append(f"{col} = :{col}")
             params[col] = val
+            applied_filters.append(f"{col.title().replace('_', ' ')}: {val}")
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
     try:
         engine = get_sqlalchemy_engine()
         query = f"""
-            SELECT document_name, user_name, hostname, pages_printed, date, month,
-                   week, printer_model, division, location
+            SELECT {', '.join(columns)}
             FROM printer_logs
             {where_clause}
             ORDER BY date DESC
@@ -520,9 +550,16 @@ def download_excel():
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name='FilteredData', index=False)
-        output.seek(0)
+            worksheet = writer.book.add_worksheet("FilteredData")
+            writer.sheets['FilteredData'] = worksheet
 
+            for i, filt in enumerate(applied_filters):
+                worksheet.write(i, 0, filt)
+
+            df_start_row = len(applied_filters) + 2
+            df.to_excel(writer, sheet_name='FilteredData', index=False, startrow=df_start_row)
+
+        output.seek(0)
         return send_file(
             output,
             as_attachment=True,
@@ -533,6 +570,7 @@ def download_excel():
     except Exception as e:
         flash(f"Error generating Excel: {e}")
         return redirect(url_for('routes.view'))
+
 
 @routes.route('/dashboard')
 def dashboard():

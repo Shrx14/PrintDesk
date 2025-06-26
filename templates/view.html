@@ -89,34 +89,34 @@
     <iframe id="download-iframe" style="display:none;"></iframe>
 
     <script>
-      document.getElementById('download-excel-btn').addEventListener('click', function() {
-        var spinner = document.getElementById('loading-spinner');
-        var iframe = document.getElementById('download-iframe');
-        var button = this;
-        spinner.style.display = 'inline-block';
-        button.disabled = true;
+document.getElementById('download-excel-btn').addEventListener('click', function() {
+  var spinner = document.getElementById('loading-spinner');
+  var iframe = document.getElementById('download-iframe');
+  var button = this;
+  spinner.style.display = 'inline-block';
+  button.disabled = true;
 
-        // Build download URL with query string if present
-        var downloadUrl = "{{ url_for('routes.download_excel') }}";
-        var queryString = "{{ query_string }}";
-        if (queryString) {
-          downloadUrl += '?' + queryString;
-        }
+  // Dynamically build query string from filter form
+  var form = document.getElementById('filter-form');
+  var formData = new FormData(form);
+  var params = new URLSearchParams();
 
-        // Set iframe src to trigger download
-        iframe.src = downloadUrl;
+  for (var pair of formData.entries()) {
+    if (pair[1].trim() !== "") {
+      params.append(pair[0], pair[1]);
+    }
+  }
 
-        // Hide spinner and enable button when iframe loads (download complete)
-        iframe.onload = function() {
-          spinner.style.display = 'none';
-          button.disabled = false;
-        };
+  var downloadUrl = "{{ url_for('routes.download_excel') }}?" + params.toString();
 
-        // Fallback: hide spinner and enable button after 15 seconds in case iframe.onload doesn't fire
-        var fallbackTimeout = setTimeout(function() {
-          spinner.style.display = 'none';
-          button.disabled = false;
-        }, 15000);
+  // Trigger file download
+  iframe.src = downloadUrl;
+
+  // Hide spinner when done
+  var fallbackTimeout = setTimeout(function() {
+    spinner.style.display = 'none';
+    button.disabled = false;
+  }, 15000);
 
         // Clear fallback if iframe loads before timeout
         iframe.onload = function() {
@@ -191,6 +191,7 @@
     toDateInput.min = fromDateInput.value;
   }
 </script>
+
   </div>
 
   <!-- Data table -->
