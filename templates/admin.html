@@ -5,6 +5,8 @@
 <div class="container py-5">
   <h2 class="text-center mb-5">👑 Admin User Management</h2>
 
+  
+
   <div class="row g-4">
     <!-- User List & Add User -->
     <div class="col-md-6">
@@ -72,7 +74,11 @@
               <label class="form-check-label" for="manageAdmin">Admin</label>
             </div>
           </div>
-          <button type="submit" class="btn btn-primary w-100">Save Changes</button>
+          <button type="submit" class="btn btn-primary w-100" id="saveChangesBtn">
+            <span class="btn-text">Save Changes</span>
+            <span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true" style="display:none;" id="saveChangesSpinner"></span>
+          </button>
+  <div id="flashMessage" class="flash-message" style="display:none; margin-top: 0.5rem;"></div>
         </form>
       </div>
     </div>
@@ -121,18 +127,35 @@ if (firstUser) {
   updateManageUserForm(selectedUser);
 }
 
+// Flash message display function
+function showFlashMessage(message, type='info') {
+  // Use the flashMessage div inside the userPermissionsForm
+  const flashMessageDiv = document.querySelector('#userPermissionsForm #flashMessage');
+  flashMessageDiv.textContent = message;
+  flashMessageDiv.className = 'flash-message flash-' + type;
+  flashMessageDiv.style.display = 'block';
+
+  // Auto-dismiss after 4 seconds
+  setTimeout(() => {
+    flashMessageDiv.style.display = 'none';
+  }, 4000);
+}
+
+const saveChangesBtn = document.getElementById('saveChangesBtn');
+const saveChangesSpinner = document.getElementById('saveChangesSpinner');
+
 document.getElementById('addUserForm').addEventListener('submit', function(e) {
   e.preventDefault();
 
   const username = document.getElementById('newUsername').value.trim();
   if (!username || users[username]) {
-    alert('Invalid or duplicate username.');
+    showFlashMessage('Invalid or duplicate username.', 'error');
     return;
   }
 
   const selectedPermission = document.querySelector('input[name="newUserPermission"]:checked');
   if (!selectedPermission) {
-    alert('Please select a permission.');
+    showFlashMessage('Please select a permission.', 'error');
     return;
   }
 
@@ -148,7 +171,7 @@ document.getElementById('addUserForm').addEventListener('submit', function(e) {
   .then(response => response.json())
   .then(data => {
     if (data.error) {
-      alert(`Error: ${data.error}`);
+      showFlashMessage(`Error: ${data.error}`, 'error');
       return;
     }
 
@@ -170,20 +193,30 @@ document.getElementById('addUserForm').addEventListener('submit', function(e) {
     li.classList.add('active');
     selectedUser = username;
     updateManageUserForm(username);
+
+    showFlashMessage(`User ${username} added successfully.`, 'success');
   })
   .catch(error => {
     console.error('Request failed:', error);
-    alert('An error occurred while adding the user.');
+    showFlashMessage('An error occurred while adding the user.', 'error');
   });
 });
 
 document.getElementById('userPermissionsForm').addEventListener('submit', function(e) {
   e.preventDefault();
-  if (!selectedUser) return alert('No user selected.');
+  if (!selectedUser) {
+    showFlashMessage('No user selected.', 'error');
+    return;
+  }
+
+  saveChangesBtn.disabled = true;
+  saveChangesSpinner.style.display = 'inline-block';
 
   const selectedRole = document.querySelector('input[name="permissionRadio"]:checked');
   if (!selectedRole) {
-    alert('Please select a permission.');
+    showFlashMessage('Please select a permission.', 'error');
+    saveChangesBtn.disabled = false;
+    saveChangesSpinner.style.display = 'none';
     return;
   }
 
@@ -196,8 +229,11 @@ document.getElementById('userPermissionsForm').addEventListener('submit', functi
   })
   .then(response => response.json())
   .then(data => {
+    saveChangesBtn.disabled = false;
+    saveChangesSpinner.style.display = 'none';
+
     if (data.error) {
-      alert(`Error: ${data.error}`);
+      showFlashMessage(`Error: ${data.error}`, 'error');
       return;
     }
 
@@ -207,11 +243,14 @@ document.getElementById('userPermissionsForm').addEventListener('submit', functi
       admin: roles.includes('admin')
     };
 
-    alert(`Permissions updated for ${selectedUser}`);
+    showFlashMessage(`Permissions updated for ${selectedUser}`, 'success');
   })
   .catch(error => {
+    saveChangesBtn.disabled = false;
+    saveChangesSpinner.style.display = 'none';
+
     console.error('Error updating permissions:', error);
-    alert('An error occurred while updating permissions.');
+    showFlashMessage('An error occurred while updating permissions.', 'error');
   });
 });
 </script>
@@ -265,6 +304,22 @@ button.btn {
   border-radius: 14px;
   text-transform: uppercase;
   font-weight: 600;
+}
+/* Spinner styles */
+.spinner-border {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  vertical-align: text-bottom;
+  border: 0.15em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-border .75s linear infinite;
+  margin-left: 0.5rem;
+}
+
+@keyframes spinner-border {
+  to { transform: rotate(360deg); }
 }
 </style>
 {% endblock %}
