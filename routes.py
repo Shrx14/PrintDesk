@@ -1021,8 +1021,10 @@ def dashboard_visualize():
         if time_filter in ['daily', 'weekly']:
             df_time = df.groupby(df['date'].dt.date)['pages_printed'].sum()
         elif time_filter == 'monthly':
+            # Filter by year for monthly grouping to match dashboard route
             current_year = pd.Timestamp.now().year
-            df_time_graph1 = df[df['date'].dt.year == current_year].groupby('month')['pages_printed'].sum()
+            df_filtered_year = df[df['date'].dt.year == current_year]
+            df_time_graph1 = df_filtered_year.groupby('month')['pages_printed'].sum()
             def parse_month_str(m):
                 try:
                     return pd.to_datetime(m, format="%b'%y")
@@ -1035,13 +1037,13 @@ def dashboard_visualize():
         else:
             df_time = df.groupby(df['date'].dt.year)['pages_printed'].sum()
 
-        least_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=True).head(10)
-        top_printers = df.groupby('printer_model')['pages_printed'].sum().sort_values(ascending=False).head(10)
+        least_printers = df.groupby('hostname')['pages_printed'].sum().sort_values(ascending=True).head(10)
+        top_printers = df.groupby('hostname')['pages_printed'].sum().sort_values(ascending=False).head(10)
 
         last_3_months = pd.Timestamp.now() - pd.DateOffset(months=3)
 
         graph4_query = """
-            SELECT printer_model, SUM(pages_printed) AS pages_printed
+            SELECT hostname, SUM(pages_printed) AS pages_printed
             FROM printer_logs
             WHERE date >= :last_3_months
             AND hostname NOT IN (SELECT hostname FROM printer_exceptions)
@@ -1052,10 +1054,10 @@ def dashboard_visualize():
             graph4_query += " AND division = :division_filter"
             params_graph4['division_filter'] = division_filter
 
-        graph4_query += " GROUP BY printer_model ORDER BY pages_printed ASC"
+        graph4_query += " GROUP BY hostname ORDER BY pages_printed ASC"
 
         df_graph4 = pd.read_sql_query(text(graph4_query), engine, params=params_graph4)
-        least_printers_3m = df_graph4.set_index('printer_model')['pages_printed'].head(10)
+        least_printers_3m = df_graph4.set_index('hostname')['pages_printed'].head(10)
 
         def plot_to_base64(fig):
             buf = BytesIO()
@@ -1093,7 +1095,7 @@ def dashboard_visualize():
         fig2, ax2 = plt.subplots(figsize=(8, 4))
         least_printers.plot(kind='bar', ax=ax2, color='red')
         ax2.set_title('Pages Printed by Location (10 Least Used Printers)')
-        ax2.set_xlabel('Printer Model')
+        ax2.set_xlabel('Printer Model / Hostname / Location')
         ax2.set_ylabel('Pages Printed')
         ax2.grid(axis='y')
         graph2 = plot_to_base64(fig2)
@@ -1101,7 +1103,7 @@ def dashboard_visualize():
         fig3, ax3 = plt.subplots(figsize=(8, 4))
         top_printers.plot(kind='bar', ax=ax3, color='green')
         ax3.set_title('Pages Printed by Location (Top 10 Used Printers)')
-        ax3.set_xlabel('Printer Model')
+        ax3.set_xlabel('Printer Model / Hostname / Location')
         ax3.set_ylabel('Pages Printed')
         ax3.grid(axis='y')
         graph3 = plot_to_base64(fig3)
