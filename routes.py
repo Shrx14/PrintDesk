@@ -47,9 +47,9 @@ def get_user_roles():
 @routes.before_app_request
 def before_request():
     allowed_paths_for_roles = {
-        'admin': {'/admin', '/home', '/dashboard', '/exceptions', '/view', '/upload', '/', '/update_user_permissions', '/add_user', '/download', '/dashboard/export'},
-        'upload': {'/upload', '/home', '/dashboard', '/exceptions', '/view', '/', '/download', '/dashboard/export'},
-        'view': {'/home', '/view', '/dashboard', '/', '/download', '/dashboard/export'},
+        'admin': {'/admin', '/', '/home', '/dashboard', '/exceptions', '/exceptions/delete/', '/view', '/upload', '/update_user_permissions', '/add_user', '/download', '/dashboard/export', '/dashboard/visualize'},
+        'upload': {'/upload', '/', '/home', '/dashboard', '/exceptions', '/exceptions/delete/', '/view', '/download', '/dashboard/export', '/dashboard/visualize'},
+        'view': {'/', '/home', '/view', '/dashboard', '/download', '/dashboard/export', '/dashboard/visualize'},
     }
 
     path = request.path
@@ -64,16 +64,27 @@ def before_request():
     roles = get_user_roles()
     g.user_roles = roles  # store roles in flask.g for use in routes if needed
 
-    # Redirect root path based on role
+    # Redirect root path based on role to home.html
     if path == '/':
-        if 'admin' in roles:
-            return redirect(url_for('routes.admin'))
-        elif 'upload' in roles:
-            return redirect(url_for('routes.upload'))
-        elif 'view' in roles:
-            return redirect(url_for('routes.view'))
+        # Allow access to home page without redirect to avoid loop
+        if 'admin' in roles or 'upload' in roles or 'view' in roles:
+            return None  # allow access to '/'
         else:
             return abort(403)
+
+    # Check access for other paths
+    # If user has any role that allows access to the path, allow
+    for role in roles:
+        allowed_paths = allowed_paths_for_roles.get(role, set())
+        # Check if path matches allowed path exactly or starts with allowed path (for parameterized routes)
+        for allowed_path in allowed_paths:
+            if allowed_path.endswith('/') and path.startswith(allowed_path):
+                return None  # allow access
+            if path == allowed_path:
+                return None  # allow access
+
+    # If no roles allow access, abort 403
+    return abort(403)
 
     # Check access for other paths
     # If user has any role that allows access to the path, allow
@@ -176,9 +187,15 @@ def update_user_permissions():
 
     return jsonify({'message': 'Permissions updated successfully'})
 
+
 @routes.route('/')
 def home():
     return render_template("home.html")
+
+# Context processor to inject user_roles into templates
+@routes.app_context_processor
+def inject_user_roles():
+    return dict(user_roles=getattr(g, 'user_roles', []))
 
 @routes.route('/api/home/html')
 def api_home_html():
@@ -892,8 +909,13 @@ def exceptions():
 
     return render_template('exceptions.html', exceptions=exceptions_list, printers=printers_list, divisions=divisions, locations=locations, message=message, error=error)
 
-@routes.route('/exceptions/delete/<int:exception_id>', methods=['POST'])
+@routes.route('/exceptions/delete/<int:exception_id>', methods=['GET', 'POST'])
 def delete_exception(exception_id):
+    if request.method == 'GET':
+        # Redirect or show friendly error for GET requests
+        flash("Invalid request method for deleting exception. Please use the Remove button.")
+        return redirect(url_for('routes.exceptions'))
+
     engine = get_sqlalchemy_engine()
     message = None
     error = None

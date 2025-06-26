@@ -127,10 +127,21 @@
 <h1><a href="{{ url_for('routes.home') }}">Printer Desk</a></h1>
     </div>
     <nav>
-      <a href="{{ url_for('routes.upload') }}"><i class="fas fa-upload"></i> Upload</a>
-      <a href="{{ url_for('routes.view') }}"><i class="fas fa-table"></i> View Data</a>
-      <a href="{{ url_for('routes.dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
-      <a href="{{ url_for('routes.exceptions') }}"><i class="fas fa-exclamation-triangle"></i> Exceptions</a>
+      {% if 'admin' in user_roles %}
+        <a href="{{ url_for('routes.admin') }}"><i class="fas fa-user-shield"></i> Admin</a>
+        <a href="{{ url_for('routes.upload') }}"><i class="fas fa-upload"></i> Upload</a>
+        <a href="{{ url_for('routes.dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
+        <a href="{{ url_for('routes.view') }}"><i class="fas fa-table"></i> View Data</a>
+        <a href="{{ url_for('routes.exceptions') }}"><i class="fas fa-exclamation-triangle"></i> Exceptions</a>
+      {% elif 'upload' in user_roles %}
+        <a href="{{ url_for('routes.upload') }}"><i class="fas fa-upload"></i> Upload</a>
+        <a href="{{ url_for('routes.dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
+        <a href="{{ url_for('routes.view') }}"><i class="fas fa-table"></i> View Data</a>
+        <a href="{{ url_for('routes.exceptions') }}"><i class="fas fa-exclamation-triangle"></i> Exceptions</a>
+      {% elif 'view' in user_roles %}
+        <a href="{{ url_for('routes.dashboard') }}"><i class="fas fa-chart-line"></i> Dashboard</a>
+        <a href="{{ url_for('routes.view') }}"><i class="fas fa-table"></i> View Data</a>
+      {% endif %}
     </nav>
   </header>
 
