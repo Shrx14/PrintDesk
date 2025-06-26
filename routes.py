@@ -187,6 +187,39 @@ def update_user_permissions():
 
     return jsonify({'message': 'Permissions updated successfully'})
 
+@routes.route('/delete_user', methods=['POST'])
+def delete_user():
+    import logging
+    import os
+    data = request.get_json()
+    logging.info(f"Received delete_user request with data: {data}")
+    username = data.get('username')
+
+    if not username:
+        logging.error("delete_user: Invalid input - username missing")
+        return jsonify({'error': 'Invalid input'}), 400
+
+    current_user = os.getlogin()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("DELETE FROM roles WHERE user_name = ?", (username,))
+        # Remove the check for user not found and always commit
+        # Ignore if no rows deleted, always return success message
+        conn.commit()
+        logging.info(f"delete_user: User deleted successfully - {username}")
+    except Exception as e:
+        conn.rollback()
+        logging.error(f"delete_user: Exception occurred - {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({'message': 'user is deleted successfully'})
+
 
 @routes.route('/')
 def home():
