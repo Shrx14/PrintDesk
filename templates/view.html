@@ -107,8 +107,9 @@ document.getElementById('download-excel-btn').addEventListener('click', function
       params.append(pair[0], pair[1]);
     }
   }
+ 
 
-  var downloadUrl = "{{ url_for('routes.download_excel') }}?" + params.toString();
+  var downloadUrl = "{{ url_for('routes.download_view_excel') }}?" + params.toString();
 
   // Trigger file download
   iframe.src = downloadUrl;

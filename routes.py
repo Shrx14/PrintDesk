@@ -543,8 +543,8 @@ def view():
         filters_applied=bool(params)
     )
 
-@routes.route('/download')
-def download_excel():
+@routes.route('/download_view_excel')
+def download_view_excel():
     columns = [
         "document_name", "user_name", "hostname", "pages_printed", "date",
         "month", "week", "printer_model", "division", "location"
@@ -554,17 +554,15 @@ def download_excel():
     params = {}
     applied_filters = []
 
-    # Search term
     search_term = request.args.get("search", "").strip()
+    from_date = request.args.get("from_date", "").strip()
+    to_date = request.args.get("to_date", "").strip()
+
     if search_term:
         search_clauses = [f"{col} LIKE :search" for col in columns]
         filters.append("(" + " OR ".join(search_clauses) + ")")
         params["search"] = f"%{search_term}%"
         applied_filters.append(f"Search: {search_term}")
-
-    # Date filters
-    from_date = request.args.get("from_date", "").strip()
-    to_date = request.args.get("to_date", "").strip()
 
     if from_date and to_date:
         filters.append("CAST(date AS DATE) BETWEEN :from_date AND :to_date")
@@ -580,15 +578,20 @@ def download_excel():
         params["to_date"] = to_date
         applied_filters.append(f"Date to: {to_date}")
 
-    # Column-specific filters
     for col in columns:
         if col == 'date':
             continue
         val = request.args.get(col)
         if val:
-            filters.append(f"{col} = :{col}")
-            params[col] = val
-            applied_filters.append(f"{col.title().replace('_', ' ')}: {val}")
+            # For string columns, use LIKE for partial match, for numeric use exact match
+            if col in ['pages_printed']:
+                filters.append(f"{col} = :{col}")
+                params[col] = val
+                applied_filters.append(f"{col.title().replace('_', ' ')}: {val}")
+            else:
+                filters.append(f"{col} LIKE :{col}")
+                params[col] = f"%{val}%"
+                applied_filters.append(f"{col.title().replace('_', ' ')}: {val}")
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
@@ -621,7 +624,7 @@ def download_excel():
         return send_file(
             output,
             as_attachment=True,
-            download_name='printer_logs_filtered.xlsx',
+            download_name='printer_logs_filtered_view.xlsx',
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
