@@ -114,7 +114,7 @@ def admin():
     if not row or 'admin' not in row[0].lower():
         cursor.close()
         conn.close()
-        return abort(403)
+        return render_template('forbidden.html')
 
     cursor.execute("SELECT user_name, roles FROM roles")
     users = cursor.fetchall()
@@ -211,6 +211,18 @@ def api_home():
 
 @routes.route('/upload', methods=['GET', 'POST'])
 def upload():
+    import os
+    username = os.getlogin()
+    from db import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT roles FROM roles WHERE user_name = ?", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if not row or 'upload' not in row[0].lower():
+        return render_template('forbidden.html')
+
     if request.method == 'POST':
         file = request.files.get('file')
         if not file:
@@ -493,6 +505,8 @@ def view():
         unique_values = {col: [] for col in columns}
         total_pages = 0
 
+    if df.empty and bool(params):
+        flash("No data found for the applied filters.")
     return render_template(
         'view.html',
         data=df,
@@ -795,6 +809,18 @@ def dashboard_export():
 
 @routes.route('/exceptions', methods=['GET', 'POST'])
 def exceptions():
+    import os
+    username = os.getlogin()
+    from db import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT roles FROM roles WHERE user_name = ?", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    if not row or ('upload' not in row[0].lower() and 'admin' not in row[0].lower()):
+        return render_template('forbidden.html')
+
     engine = get_sqlalchemy_engine()
     message = None
     error = None
