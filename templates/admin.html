@@ -267,7 +267,7 @@ deleteUserBtn.addEventListener('click', function() {
   }
 
   // Show confirmation flash message with confirm and cancel buttons
-  const flashMessageDiv = document.querySelector('#userPermissionsForm #flashMessage');
+  const flashMessageDiv = document.querySelector('#flashMessage');
   flashMessageDiv.innerHTML = `
     Are you sure you want to delete user "<strong>${selectedUser}</strong>"? This action cannot be undone.
     <div style="margin-top: 0.5rem;">
@@ -275,7 +275,7 @@ deleteUserBtn.addEventListener('click', function() {
       <button id="cancelDeleteBtn" class="btn btn-secondary btn-sm">Cancel</button>
     </div>
   `;
-  flashMessageDiv.className = 'flash-message flash-warning';
+  flashMessageDiv.className = 'flash-messages flash-warning';
   flashMessageDiv.style.display = 'block';
 
   // Disable delete button to prevent multiple clicks
