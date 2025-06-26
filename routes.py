@@ -42,7 +42,7 @@ def admin():
     if not row or 'admin' not in row[0].lower():
         cursor.close()
         conn.close()
-        return abort(403)
+        return render_template('forbidden.html')
 
     cursor.execute("SELECT user_name, roles FROM roles")
     users = cursor.fetchall()
