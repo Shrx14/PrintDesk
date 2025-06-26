@@ -48,8 +48,8 @@ def get_user_roles():
 def before_request():
     allowed_paths_for_roles = {
         'admin': {'/admin', '/home', '/dashboard', '/exceptions', '/view', '/upload', '/', '/update_user_permissions', '/add_user', '/download', '/dashboard/export'},
-        'upload': {'/upload', '/home', '/dashboard', '/exceptions', '/view', '/'},
-        'view': {'/home', '/view', '/dashboard', '/'},
+        'upload': {'/upload', '/home', '/dashboard', '/exceptions', '/view', '/', '/download', '/dashboard/export'},
+        'view': {'/home', '/view', '/dashboard', '/', '/download', '/dashboard/export'},
     }
 
     path = request.path
