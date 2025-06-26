@@ -5,7 +5,7 @@
 <div class="container py-5">
   <h2 class="text-center mb-5">👑 Admin User Management</h2>
 
-  
+  <div id="flashMessage" class="flash-messages" style="display:none; margin-top: 0.5rem;"></div>
 
   <div class="row g-4">
     <!-- User List & Add User -->
@@ -78,7 +78,6 @@
             <span class="btn-text">Save Changes</span>
             <span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true" style="display:none;" id="saveChangesSpinner"></span>
           </button>
-  <div id="flashMessage" class="flash-message" style="display:none; margin-top: 0.5rem;"></div>
         </form>
       </div>
     </div>
@@ -129,16 +128,16 @@ if (firstUser) {
 
 // Flash message display function
 function showFlashMessage(message, type='info') {
-  // Use the flashMessage div inside the userPermissionsForm
-  const flashMessageDiv = document.querySelector('#userPermissionsForm #flashMessage');
-  flashMessageDiv.textContent = message;
-  flashMessageDiv.className = 'flash-message flash-' + type;
+  // Use the flashMessage div at the top of the page
+  const flashMessageDiv = document.querySelector('#flashMessage');
+  flashMessageDiv.innerHTML = `<ul><li>${message}</li></ul>`;
+  flashMessageDiv.className = 'flash-messages flash-' + type;
   flashMessageDiv.style.display = 'block';
 
-  // Auto-dismiss after 4 seconds
-  setTimeout(() => {
-    flashMessageDiv.style.display = 'none';
-  }, 4000);
+  // Auto-dismiss removed as per user request
+  // setTimeout(() => {
+  //   flashMessageDiv.style.display = 'none';
+  // }, 4000);
 }
 
 const saveChangesBtn = document.getElementById('saveChangesBtn');
@@ -320,6 +319,28 @@ button.btn {
 
 @keyframes spinner-border {
   to { transform: rotate(360deg); }
+}
+.flash-messages {
+  margin-top: 25px;
+  text-align: left;
+}
+
+.flash-messages ul {
+  list-style: none;
+  padding: 0;
+}
+
+.flash-messages li {
+  margin-bottom: 10px;
+  padding: 12px 18px;
+  background-color: #d1fae5;
+  color: #065f46;
+  border-left: 5px solid #10b981;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  user-select: none;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
 }
 </style>
 {% endblock %}
