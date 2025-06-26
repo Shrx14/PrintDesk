@@ -10,8 +10,8 @@
   <div class="row g-4">
     <!-- User List & Add User -->
     <div class="col-md-6">
-      <div class="card bg-dark text-white shadow">
-        <div class="card-header bg-primary text-white">
+      <div class="card shadow">
+        <div class="card-header">
           <strong>Users</strong>
         </div>
         <ul id="userList" class="list-group list-group-flush">
@@ -20,7 +20,7 @@
           {% endfor %}
         </ul>
 
-        <div class="card-header bg-primary text-white mt-4">
+        <div class="card-header mt-4">
           <strong>Add New User</strong>
         </div>
         <form id="addUserForm" class="p-3">
@@ -50,8 +50,8 @@
 
     <!-- Manage Selected User -->
     <div class="col-md-6">
-      <div class="card bg-dark text-white shadow">
-        <div class="card-header bg-secondary text-white">
+        <div class="card shadow">
+          <div class="card-header">
           <strong>Manage User Permissions</strong>
         </div>
         <form id="userPermissionsForm" class="p-3">
@@ -78,6 +78,10 @@
             <span class="btn-text">Save Changes</span>
             <span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true" style="display:none;" id="saveChangesSpinner"></span>
           </button>
+          <button type="button" class="btn btn-danger w-100 mt-3" id="deleteUserBtn" disabled aria-label="Delete selected user">
+            Delete User
+            <span class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true" style="display:none;" id="deleteUserSpinner"></span>
+          </button>
         </form>
       </div>
     </div>
@@ -93,6 +97,9 @@ const selectedUsernameInput = document.getElementById('selectedUsername');
 const manageView = document.getElementById('manageView');
 const manageUpload = document.getElementById('manageUpload');
 const manageAdmin = document.getElementById('manageAdmin');
+const saveChangesBtn = document.getElementById('saveChangesBtn');
+const saveChangesSpinner = document.getElementById('saveChangesSpinner');
+const deleteUserBtn = document.getElementById('deleteUserBtn');
 let selectedUser = null;
 
 function clearSelection() {
@@ -116,6 +123,7 @@ userList.addEventListener('click', (e) => {
     clearSelection();
     e.target.classList.add('active');
     updateManageUserForm(username);
+    deleteUserBtn.disabled = false;  // Enable delete button on user select
   }
 });
 
@@ -124,6 +132,7 @@ if (firstUser) {
   firstUser.classList.add('active');
   selectedUser = firstUser.getAttribute('data-username');
   updateManageUserForm(selectedUser);
+  deleteUserBtn.disabled = false;  // Enable delete button on initial user select
 }
 
 // Flash message display function
@@ -139,9 +148,6 @@ function showFlashMessage(message, type='info') {
   //   flashMessageDiv.style.display = 'none';
   // }, 4000);
 }
-
-const saveChangesBtn = document.getElementById('saveChangesBtn');
-const saveChangesSpinner = document.getElementById('saveChangesSpinner');
 
 document.getElementById('addUserForm').addEventListener('submit', function(e) {
   e.preventDefault();
@@ -192,6 +198,7 @@ document.getElementById('addUserForm').addEventListener('submit', function(e) {
     li.classList.add('active');
     selectedUser = username;
     updateManageUserForm(username);
+    deleteUserBtn.disabled = false;
 
     showFlashMessage(`User ${username} added successfully.`, 'success');
   })
@@ -252,52 +259,132 @@ document.getElementById('userPermissionsForm').addEventListener('submit', functi
     showFlashMessage('An error occurred while updating permissions.', 'error');
   });
 });
+
+deleteUserBtn.addEventListener('click', function() {
+  if (!selectedUser) {
+    showFlashMessage('No user selected.', 'error');
+    return;
+  }
+
+  // Show confirmation flash message with confirm and cancel buttons
+  const flashMessageDiv = document.querySelector('#userPermissionsForm #flashMessage');
+  flashMessageDiv.innerHTML = `
+    Are you sure you want to delete user "<strong>${selectedUser}</strong>"? This action cannot be undone.
+    <div style="margin-top: 0.5rem;">
+      <button id="confirmDeleteBtn" class="btn btn-danger btn-sm me-2">Confirm</button>
+      <button id="cancelDeleteBtn" class="btn btn-secondary btn-sm">Cancel</button>
+    </div>
+  `;
+  flashMessageDiv.className = 'flash-message flash-warning';
+  flashMessageDiv.style.display = 'block';
+
+  // Disable delete button to prevent multiple clicks
+  deleteUserBtn.disabled = true;
+
+  // Confirm delete button handler
+  const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+  confirmDeleteBtn.addEventListener('click', function() {
+    const deleteUserSpinner = document.getElementById('deleteUserSpinner');
+    deleteUserSpinner.style.display = 'inline-block';
+
+    fetch('/delete_user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: selectedUser })
+    })
+    .then(response => response.json())
+      .then(data => {
+        console.log('Delete user response message:', data.message);
+        deleteUserBtn.disabled = false;
+        deleteUserSpinner.style.display = 'none';
+
+        if (data.error) {
+          showFlashMessage(`Error: ${data.error}`, 'error');
+          return;
+        }
+
+        // Remove user from frontend list and clear form
+        const userItem = userList.querySelector(`li[data-username="${selectedUser}"]`);
+        if (userItem) {
+          userList.removeChild(userItem);
+        }
+        selectedUser = null;
+        selectedUsernameInput.value = '';
+        manageView.checked = false;
+        manageUpload.checked = false;
+        manageAdmin.checked = false;
+        deleteUserBtn.disabled = true;
+
+        showFlashMessage(`${data.message}`, 'success');
+      })
+    .catch(error => {
+      deleteUserBtn.disabled = false;
+      deleteUserSpinner.style.display = 'none';
+      console.error('Error deleting user:', error);
+      showFlashMessage('An error occurred while deleting the user.', 'error');
+    });
+  });
+
+  // Cancel delete button handler
+  const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+  cancelDeleteBtn.addEventListener('click', function() {
+    flashMessageDiv.style.display = 'none';
+    deleteUserBtn.disabled = false;
+  });
+});
 </script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
 body {
-  background-color: #121212;
+  background-color: #ffffff;
   font-family: 'Poppins', sans-serif;
-  color: #cfd8dc;
+  color: #333333;
   padding: 3rem 1rem;
 }
 .card {
-  background-color: #263238;
+  background-color: #ffffff;
   border-radius: 16px;
-  border: 1.5px solid #37474f;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+  border: 1.5px solid #ccc;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  color: #333333;
 }
 .card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 14px 36px rgba(3, 155, 229, 0.5);
+  box-shadow: 0 14px 36px rgba(65, 118, 144, 0.3);
 }
 .card-header {
   font-weight: 600;
   font-size: 1.25rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
+  background-color: #f0f0f0;
+  color: #333333;
 }
 .list-group-item {
-  background-color: #37474f;
-  color: #cfd8dccc;
+  background-color: #ffffff;
+  color: #333333;
   font-weight: 500;
   border: none;
   cursor: pointer;
 }
 .list-group-item.active {
-  background-color: #0288d1;
-  color: #eceff1;
+  background-color: #b7c7fb;
+  color: #ffffff;
+}
+.card-header {
+  background-color: #1e40af;
+  color: #ffffff;
 }
 input.form-control {
-  background-color: #263238;
-  color: #eceff1;
-  border: 1.5px solid #37474f;
+  background-color: #ffffff;
+  color: #333333;
+  border: 1.5px solid #ccc;
 }
 input.form-control:focus {
   border-color: #4fc3f7;
-  background-color: #37474f;
+  background-color: #ffffff;
 }
 button.btn {
   border-radius: 14px;
