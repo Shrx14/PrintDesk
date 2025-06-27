@@ -1,8 +1,12 @@
 from flask import Flask
 from routes import routes
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-app.secret_key = 'supersecretkey'
+app.secret_key = os.getenv('SECRET_KEY', 'supersecretkey')
 
 app.register_blueprint(routes)
 
