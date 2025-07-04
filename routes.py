@@ -444,6 +444,8 @@ def api_upload_excel():
         return jsonify({'success': True, 'message': 'File uploaded and processed successfully.'})
 
     except Exception as e:
+        logging.error(f"Exception in dashboard_visualize: {e}")
+        logging.error(traceback.format_exc())
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @routes.route('/view')
@@ -463,6 +465,8 @@ def view():
     search_term = request.args.get("search", "").strip()
     from_date = request.args.get("from_date", "").strip()
     to_date = request.args.get("to_date", "").strip()
+    sort_by = request.args.get("sort_by", "").strip()
+    sort_order = request.args.get("sort_order", "desc").strip().lower()
 
     if search_term:
         search_clauses = [f"{col} LIKE :search" for col in columns]
@@ -498,6 +502,13 @@ def view():
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
+    # Validate sort_by and sort_order
+    valid_sort_columns = set(columns)
+    if sort_by not in valid_sort_columns:
+        sort_by = "date"
+    if sort_order not in ("asc", "desc"):
+        sort_order = "desc"
+
     try:
         engine = get_sqlalchemy_engine()
 
@@ -516,7 +527,7 @@ def view():
                        week, printer_model, division, location
                 FROM printer_logs
                 {where_clause}
-                ORDER BY date DESC
+                ORDER BY {sort_by} {sort_order}
                 OFFSET {offset} ROWS FETCH NEXT {per_page} ROWS ONLY
             """
             df = pd.read_sql_query(text(query), conn, params=params)
@@ -540,7 +551,9 @@ def view():
         page=page,
         total_pages=total_pages,
         unique_values=unique_values,
-        filters_applied=bool(params)
+        filters_applied=bool(params),
+        sort_by=sort_by,
+        sort_order=sort_order
     )
 
 @routes.route('/download_view_excel')
@@ -729,7 +742,7 @@ def dashboard():
                            date_input=date_input,
                            month_input=month_input,
                            year_input=year_input,
-                           week_select=week_select)
+                           week_select=week_select)                                                                                      
 
 @routes.route('/dashboard/export')
 def dashboard_export():
@@ -759,21 +772,34 @@ def dashboard_export():
         if division_filter != 'all':
             df = df[df['division'] == division_filter]
 
+        # Time-based filtering
         if time_filter == 'daily' and date_input:
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
                 df = df[df['date'].dt.date == filter_date.date()]
+
         elif time_filter == 'weekly' and month_input and week_select:
-            filter_date = pd.to_datetime(month_input, errors='coerce')
-            if not pd.isna(filter_date):
-                month_str = filter_date.strftime("%b'%y")
-                week_str = f"Week {week_select}"
-                df = df[(df['month'] == month_str) & (df['week'] == week_str)]
+            try:
+                filter_date = pd.to_datetime(month_input, errors='coerce')
+                filter_week = int(week_select)
+                if not pd.isna(filter_date):
+                    month_str = filter_date.strftime("%b'%y")  # e.g. Jul'25
+                    filter_year = filter_date.year
+                    week_str = f"Week {filter_week}"
+                    df = df[
+                        (df['month'] == month_str) & 
+                        (df['date'].dt.year == filter_year) & 
+                        (df['week'] == week_str)
+                    ]
+            except Exception:
+                pass
+
         elif time_filter == 'monthly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
             if not pd.isna(filter_date):
                 month_str = filter_date.strftime("%b'%y")
                 df = df[df['month'] == month_str]
+
         elif time_filter == 'yearly' and year_input:
             try:
                 filter_year = int(year_input)
@@ -781,12 +807,14 @@ def dashboard_export():
             except ValueError:
                 pass
 
+        # Group and sort
         printer_group = df.groupby(['printer_model', 'hostname', 'location'])['pages_printed'].sum().reset_index()
         top_printers = printer_group.sort_values(by='pages_printed', ascending=False).head(10)
         least_printers = printer_group.sort_values(by='pages_printed', ascending=True).head(10)
 
         top_users = df.groupby('user_name')['pages_printed'].sum().sort_values(ascending=False).head(10).reset_index()
 
+        # Filter summary
         filter_summary = [
             ['Applied Filters'],
             ['Time Filter', time_filter],
@@ -799,6 +827,7 @@ def dashboard_export():
             []
         ]
 
+        # Write to Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             for sheet_name, data in [
@@ -822,6 +851,7 @@ def dashboard_export():
     except Exception as e:
         flash(f"Error generating Excel: {e}")
         return redirect(url_for('routes.dashboard'))
+
 
 @routes.route('/exceptions', methods=['GET', 'POST'])
 def exceptions():
@@ -1000,20 +1030,31 @@ def dashboard_visualize():
         if division_filter and division_filter != 'all':
             df = df[df['division'] == division_filter]
 
+        # Create copy of df before applying year_input filtering
+        df_original = df.copy()
+
+        # Apply filters based on time_filter
         if time_filter == 'daily' and date_input:
             filter_date = pd.to_datetime(date_input, errors='coerce')
             if not pd.isna(filter_date):
                 df = df[df['date'].dt.date == filter_date.date()]
-        elif time_filter == 'weekly' and month_input and week_select:
+        elif time_filter == 'weekly' and month_input:
             filter_date = pd.to_datetime(month_input, errors='coerce')
             if not pd.isna(filter_date):
                 month_str = filter_date.strftime("%b'%y")
-                week_str = f"Week {week_select}"
-                df = df[(df['month'] == month_str) & (df['week'] == week_str)]
-        elif time_filter == 'monthly' and month_input:
-            filter_date = pd.to_datetime(month_input, errors='coerce')
-            if not pd.isna(filter_date):
-                df = df[df['month'] == filter_date.strftime("%b'%y")]
+                df = df[df['month'] == month_str]
+        elif time_filter == 'monthly':
+            if year_input:
+                try:
+                    year_int = int(year_input)
+                    df = df[df['date'].dt.year == year_int]
+                except ValueError:
+                    pass
+            else:
+                if month_input:
+                    filter_date = pd.to_datetime(month_input, errors='coerce')
+                    if not pd.isna(filter_date):
+                        df = df[df['date'].dt.year == filter_date.year]
         elif time_filter == 'yearly' and year_input:
             try:
                 year_int = int(year_input)
@@ -1021,46 +1062,8 @@ def dashboard_visualize():
             except ValueError:
                 pass
 
-        if time_filter in ['daily', 'weekly']:
-            df_time = df.groupby(df['date'].dt.date)['pages_printed'].sum()
-        elif time_filter == 'monthly':
-            # Filter by year for monthly grouping to match dashboard route
-            current_year = pd.Timestamp.now().year
-            df_filtered_year = df[df['date'].dt.year == current_year]
-            df_time_graph1 = df_filtered_year.groupby('month')['pages_printed'].sum()
-            def parse_month_str(m):
-                try:
-                    return pd.to_datetime(m, format="%b'%y")
-                except Exception:
-                    return pd.NaT
-            df_time_graph1.index = df_time_graph1.index.map(parse_month_str)
-            df_time_graph1 = df_time_graph1.dropna()
-            df_time_graph1 = df_time_graph1.sort_index()
-            df_time = df_time_graph1
-        else:
-            df_time = df.groupby(df['date'].dt.year)['pages_printed'].sum()
-
-        least_printers = df.groupby('hostname')['pages_printed'].sum().sort_values(ascending=True).head(10)
-        top_printers = df.groupby('hostname')['pages_printed'].sum().sort_values(ascending=False).head(10)
-
-        last_3_months = pd.Timestamp.now() - pd.DateOffset(months=3)
-
-        graph4_query = """
-            SELECT hostname, SUM(pages_printed) AS pages_printed
-            FROM printer_logs
-            WHERE date >= :last_3_months
-            AND hostname NOT IN (SELECT hostname FROM printer_exceptions)
-        """
-        params_graph4 = {'last_3_months': last_3_months}
-
-        if division_filter and division_filter != 'all':
-            graph4_query += " AND division = :division_filter"
-            params_graph4['division_filter'] = division_filter
-
-        graph4_query += " GROUP BY hostname ORDER BY pages_printed ASC"
-
-        df_graph4 = pd.read_sql_query(text(graph4_query), engine, params=params_graph4)
-        least_printers_3m = df_graph4.set_index('hostname')['pages_printed'].head(10)
+        # For Graphs 2 & 3, use this filtered df
+        df_filtered = df.copy()
 
         def plot_to_base64(fig):
             buf = BytesIO()
@@ -1070,53 +1073,157 @@ def dashboard_visualize():
             plt.close(fig)
             return img_base64
 
+        # Graph 1
         fig1, ax1 = plt.subplots(figsize=(8, 4))
-        if time_filter in ['daily', 'weekly']:
-            df_time.plot(kind='bar', ax=ax1, color='blue')
+
+        if time_filter == 'daily':
+            df_time = df.groupby(df['date'].dt.date)['pages_printed'].sum()
+            bars = df_time.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Date')
+        elif time_filter == 'weekly':
+            df_graph = df.copy()
+            weeks = [f"Week {i}" for i in range(1, 6)]
+            if month_input:
+                filter_date = pd.to_datetime(month_input, errors='coerce')
+                if not pd.isna(filter_date):
+                    month_str = filter_date.strftime("%b'%y")
+                    df_graph = df_graph[df_graph['month'] == month_str]
+
+            df_grouped = df_graph.groupby('week')['pages_printed'].sum()
+            df_time = pd.Series(index=weeks, data=0)
+            for week in weeks:
+                if week in df_grouped.index:
+                    df_time[week] = df_grouped[week]
+
+            bars = df_time.plot(kind='bar', ax=ax1, color='blue')
+            ax1.set_xlabel('Week')
         elif time_filter == 'monthly':
+            if year_input:
+                try:
+                    year_int = int(year_input)
+                    df_filtered_year = df[df['date'].dt.year == year_int]
+                except ValueError:
+                    df_filtered_year = df
+            else:
+                df_filtered_year = df
+
+            df_time_graph1 = df_filtered_year.groupby('month')['pages_printed'].sum()
+
             def parse_month_str(m):
                 try:
                     return pd.to_datetime(m, format="%b'%y")
-                except Exception:
+                except:
                     return pd.NaT
+
             df_time_graph1.index = df_time_graph1.index.map(parse_month_str)
-            df_time_graph1 = df_time_graph1.dropna()
-            df_time_graph1 = df_time_graph1.sort_index()
-            df_time_graph1.plot(kind='bar', ax=ax1, color='blue')
-            ax1.set_xlabel('Month')
-            ax1.set_xticklabels([dt.strftime('%b') for dt in df_time_graph1.index], rotation=45, ha='right')
-        else:
-            df_time = df_time.sort_index()
-            df_time.plot(kind='bar', ax=ax1, color='blue')
+            df_time_graph1 = df_time_graph1.dropna().sort_index()
+
+            fig5, ax5 = plt.subplots(figsize=(8, 4))
+            bars5 = df_time_graph1.plot(kind='bar', ax=ax5, color='purple')
+            ax5.set_xlabel('Month')
+            ax5.set_ylabel('Pages Printed')
+            ax5.set_title('Monthly Pages Printed')
+            ax5.set_xticklabels([dt.strftime('%b') for dt in df_time_graph1.index], rotation=45, ha='right')
+            ax5.grid(axis='y')
+            for bar in bars5.patches:
+                ax5.annotate(f'{int(bar.get_height())}',
+                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                             xytext=(0, 3), textcoords="offset points",
+                             ha='center', va='bottom')
+            graph1 = plot_to_base64(fig5)
+        elif time_filter == 'yearly':
+            current_year = pd.Timestamp.now().year
+            years_to_include = list(range(current_year - 3, current_year + 1))
+            df_years_filtered = df_original[df_original['date'].dt.year.isin(years_to_include)]
+            df_time = df_years_filtered.groupby(df_years_filtered['date'].dt.year)['pages_printed'].sum()
+            df_time = df_time.reindex(years_to_include, fill_value=0).sort_index()
+            bars = df_time.plot(kind='bar', ax=ax1, color='blue')
             ax1.set_xlabel('Year')
-        ax1.set_title('Pages Printed Over Time')
-        ax1.set_ylabel('Pages Printed')
-        ax1.grid(True)
-        graph1 = plot_to_base64(fig1)
+        else:
+            df_time = df.groupby(df['date'].dt.year)['pages_printed'].sum().sort_index()
+            bars = df_time.plot(kind='bar', ax=ax1, color='blue')
+            ax1.set_xlabel('Year')
+
+        if time_filter != 'monthly':
+            for bar in bars.patches:
+                ax1.annotate(f'{int(bar.get_height())}',
+                             xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                             xytext=(0, 3), textcoords="offset points",
+                             ha='center', va='bottom')
+            ax1.set_title('Pages Printed Over Time')
+            ax1.set_ylabel('Pages Printed')
+            ax1.grid(axis='y')
+            graph1 = plot_to_base64(fig1)
+
+        # Graphs 2 & 3: Use df_filtered
+        if time_filter == 'monthly' and month_input:
+            filter_date = pd.to_datetime(month_input, errors='coerce')
+            if not pd.isna(filter_date):
+                month_str = filter_date.strftime("%b'%y")
+                df_month_only = df_filtered[df_filtered['month'] == month_str]
+            else:
+                df_month_only = df_filtered
+        else:
+            df_month_only = df_filtered
+
+        least_printers = df_month_only.groupby('hostname')['pages_printed'].sum().sort_values().head(10)
+        top_printers = df_month_only.groupby('hostname')['pages_printed'].sum().sort_values(ascending=False).head(10)
 
         fig2, ax2 = plt.subplots(figsize=(8, 4))
-        least_printers.plot(kind='bar', ax=ax2, color='red')
-        ax2.set_title('Pages Printed by Location (10 Least Used Printers)')
-        ax2.set_xlabel(' Hostname ')
+        bars2 = least_printers.plot(kind='bar', ax=ax2, color='red')
+        ax2.set_title('Pages Printed (10 Least Used Printers)')
+        ax2.set_xlabel('Hostname')
         ax2.set_ylabel('Pages Printed')
         ax2.grid(axis='y')
+        for bar in bars2.patches:
+            ax2.annotate(f'{int(bar.get_height())}',
+                         xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                         xytext=(0, 3), textcoords="offset points",
+                         ha='center', va='bottom')
         graph2 = plot_to_base64(fig2)
 
         fig3, ax3 = plt.subplots(figsize=(8, 4))
-        top_printers.plot(kind='bar', ax=ax3, color='green')
-        ax3.set_title('Pages Printed by Location (Top 10 Used Printers)')
-        ax3.set_xlabel(' Hostname ')
+        bars3 = top_printers.plot(kind='bar', ax=ax3, color='green')
+        ax3.set_title('Pages Printed (Top 10 Used Printers)')
+        ax3.set_xlabel('Hostname')
         ax3.set_ylabel('Pages Printed')
         ax3.grid(axis='y')
+        for bar in bars3.patches:
+            ax3.annotate(f'{int(bar.get_height())}',
+                         xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                         xytext=(0, 3), textcoords="offset points",
+                         ha='center', va='bottom')
         graph3 = plot_to_base64(fig3)
 
+        # Graph 4
+        last_3_months = pd.Timestamp.now() - pd.DateOffset(months=3)
+        graph4_query = """
+            SELECT hostname, SUM(pages_printed) AS pages_printed
+            FROM printer_logs
+            WHERE date >= :last_3_months
+            AND hostname NOT IN (SELECT hostname FROM printer_exceptions)
+        """
+        params_graph4 = {'last_3_months': last_3_months}
+        if division_filter and division_filter != 'all':
+            graph4_query += " AND division = :division_filter"
+            params_graph4['division_filter'] = division_filter
+
+        graph4_query += " GROUP BY hostname ORDER BY pages_printed ASC"
+
+        df_graph4 = pd.read_sql_query(text(graph4_query), engine, params=params_graph4)
+        least_printers_3m = df_graph4.set_index('hostname')['pages_printed'].head(10)
+
         fig4, ax4 = plt.subplots(figsize=(8, 4))
-        least_printers_3m.plot(kind='bar', ax=ax4, color='orange')
+        bars4 = least_printers_3m.plot(kind='bar', ax=ax4, color='orange')
         ax4.set_title('Last 3 Months Pages Printed (10 Least Used Printers)')
-        ax4.set_xlabel(' Hostname ')
+        ax4.set_xlabel('Hostname')
         ax4.set_ylabel('Pages Printed')
         ax4.grid(axis='y')
+        for bar in bars4.patches:
+            ax4.annotate(f'{int(bar.get_height())}',
+                         xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                         xytext=(0, 3), textcoords="offset points",
+                         ha='center', va='bottom')
         graph4 = plot_to_base64(fig4)
 
         return jsonify({
@@ -1129,3 +1236,4 @@ def dashboard_visualize():
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+   

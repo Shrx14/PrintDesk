@@ -69,7 +69,7 @@
 
 <h2 class="mb-4 text-center">📊 Printer Usage Dashboard</h2>
 
-{% if time_filter == 'monthly' and division_filter in ['PT', 'PY'] and not request.query_string %}
+{% if time_filter == 'monthly' and division_filter in ['PT', 'PY'] %}
   <div class="alert alert-info text-center">
     Showing default data for <strong>last month</strong> and <strong>{{ division_filter }}</strong> division.
   </div>

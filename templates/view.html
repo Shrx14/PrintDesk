@@ -203,7 +203,26 @@ document.getElementById('download-excel-btn').addEventListener('click', function
         <tr>
           <th>Sr No</th>
           {% for col in data.columns %}
-          <th>{{ col|title }}</th>
+          <th>
+            {{ col|title }}
+            {% if col == 'pages_printed' %}
+              {# Sorting button for pages_printed column #}
+              {% set new_sort_order = 'asc' if sort_by != 'pages_printed' or sort_order == 'desc' else 'desc' %}
+              {% set args_dict = request.args.to_dict() %}
+              {% set args_dict = args_dict.update({'sort_by': 'pages_printed', 'sort_order': new_sort_order, 'page': 1}) or args_dict %}
+              <a href="{{ url_for('routes.view', **args_dict) }}" style="color: white; text-decoration: none; margin-left: 5px;">
+                {% if sort_by == 'pages_printed' %}
+                  {% if sort_order == 'asc' %}
+                    ▲
+                  {% else %}
+                    ▼
+                  {% endif %}
+                {% else %}
+                  ⇅
+                {% endif %}
+              </a>
+            {% endif %}
+          </th>
           {% endfor %}
         </tr>
 
